@@ -1,4 +1,3 @@
-
-* ani within mOTU
-* cog overlaps within mOTU
-* piecewise blast, 1kb 
+* compute core
+* compute completeness
+* piecewise blast, 1kb

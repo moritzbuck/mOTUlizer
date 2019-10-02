@@ -1,13 +1,15 @@
-import os
-import pandas
-import shutil
-import sys
-sys.path += ["/home/moritz/repos/moritz/0039_mOTUlizer"]
-
-from mOTUlizer.classes.mOTU import mOTU
-from tqdm import tqdm
 
 def main():
+    import os
+    import pandas
+    import shutil
+    import sys
+
+    sys.path += ["/home/moritz/repos/moritz/0039_mOTUlizer"]
+
+    from mOTUlizer.classes.mOTU import mOTU
+    from tqdm import tqdm
+
     stats = pandas.read_csv("test_data/magstats.csv", index_col = 0)
 
     with open("test_data/taxonomy.tax") as handle:
@@ -24,7 +26,11 @@ def main():
             name = l.split()[0]
             bins = l.split()[1].split(";")
             otu_list += [ mOTU( name = name, members = bins, data_pack = data_pack) ]
-    print({t.name : t.mean_overlap() for t in tqdm(otu_list)})
+
+    for otu in otu_list:
+        if len(otu) > 3:
+            print(otu)
+            otu.core_likelyhood()
 
 if __name__ == "__main__":
     main()

@@ -4,7 +4,6 @@ class MetaBin:
     def __repr__(self) :
         return "< {tax} bin {name} >".format(tax = self.tail(), name = self.name)
 
-
     def __init__(self, name, taxonomy, stats, mag2cog, base_folder):
         self.name = name
         self.taxonomy = taxonomy[self.name]
@@ -17,9 +16,9 @@ class MetaBin:
         self.checkm_complet = stats.loc[self.name, "completeness"]
         self.checkm_contam = stats.loc[self.name, "contamination"]
         self.checkm_hetero = stats.loc[self.name, "strain_heterogeneity"]
-        self.proteom = pjoin(base_folder, "proteom", name + ".faa")
-        self.genome = pjoin(base_folder, "genome", name + ".fna")
-        self.gff = pjoin(base_folder, "gffs", name + ".faa")
+        self.proteom = pjoin(base_folder, "proteoms", name + ".faa")
+        self.genome = pjoin(base_folder, "genomes", name + ".fna")
+        self.gff = pjoin(base_folder, "gffs", name + ".gff")
 
     def tail(self) :
         return [f for f in self.taxonomy if f != ''][-1]
