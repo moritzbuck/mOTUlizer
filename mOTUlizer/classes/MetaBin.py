@@ -19,9 +19,15 @@ class MetaBin:
         self.proteom = pjoin(base_folder, "proteoms", name + ".faa")
         self.genome = pjoin(base_folder, "genomes", name + ".fna")
         self.gff = pjoin(base_folder, "gffs", name + ".gff")
+        self.new_completness = None
 
     def tail(self) :
         return [f for f in self.taxonomy if f != ''][-1]
 
     def overlap(self, target):
         return self.cogs.intersection(target.cogs)
+
+    def estimate_nb_cogs(self):
+
+        assert self.new_completness != None, "new_completness not computed, please do"
+        return 100*len(self.cogs)/self.new_completness

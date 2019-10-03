@@ -13,10 +13,19 @@ class mOTU:
     def __repr__(self):
         return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax = self.consensus_tax()[0].split(";")[-1])
 
-    def __init__(self, name, members, data_pack):
+    def __init__(self, name, members, data_pack, precomp_ani = None):
         self.name = name
         self.members = [MetaBin(m, **data_pack) for m in members]
         self.core = None
+        self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self])}
+        for mag in self:
+            for cog in mag.cogs:
+                    self.cogCounts[cog] += 1
+        self.likelies = self.__core_likelyhood()
+        if precomp_ani:
+            memb_dict = {m.name : m for m in self}
+            self.fastani_dict = { (a,b) : precomp_ani[(a,b)] for a in memb_dict for b in memb_dict if a != b  and(a,b) in precomp_ani }
+
 
     def __getitem__(self, i):
         return self.members[i]
@@ -84,32 +93,63 @@ class mOTU:
         "taxonomy" : tax[0],
         "certainty" : tax_cert,
         "mean_fastani" : str(self.mean_fastani()),
-        "mean_COG_overlap" : str(self.mean_overlap())
+        "mean_COG_overlap" : str(self.mean_overlap()),
+        "core_size" : len(self.core),
+        "full_pan" : self.get_pangenome_size(singletons = True),
+        "nosingle_pan" : self.get_pangenome_size(singletons = False),
+        "mean_cog_count" : self.nb_cogs(),
         }
         return stats
 
-    def core_likelyhood(self):
-        cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self])}
-        for mag in self:
-            for cog in mag.cogs:
-                    cogCounts[cog] += 1
-        likelies = {cog : self.__core_likely(cog, cogCounts) for cog in cogCounts}
+    def get_count_stats(self):
+        tax = self.consensus_tax()
+        tax_cert = ";".join([str(t) for t in tax[1]])
+        data = self.count_distribution()
+
+        stats = { "otu" : self.name,
+        "nb_genomes" : len(self),
+        "taxonomy" : tax[0],
+        "certainty" : tax_cert,
+        "mean_fastani" : str(self.mean_fastani()),
+        "mean_COG_overlap" : str(self.mean_overlap()),
+        "core_size" : len(self.core),
+        "full_pan" : self.get_pangenome_size(singletons = True),
+        "nosingle_pan" : self.get_pangenome_size(singletons = False),
+        "mean_cog_count" : self.nb_cogs(),
+        }
+
+        out_dat = []
+        for k,v in data.items():
+            tt = stats.copy()
+            tt.update({'fract' : k/len(self), 'cog_count' : v})
+            out_dat += [tt]
+        return out_dat
+
+    def __core_likelyhood(self, max_it = 10):
+
+        likelies = {cog : self.__core_likely(cog) for cog in self.cogCounts}
         self.core = set([c for c, v in likelies.items() if v > 1])
         core_len = len(self.core)
-        print("iteration 1 : ", core_len )
+        i = 1
+        if VERBOSE:
+            print("iteration 1 : ", core_len )
         for mag in self:
             mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
-        for i in range(10):
-            likelies = {cog : self.__core_likely(cog, cogCounts, complet = "new", core_size = core_len) for cog in cogCounts}
+        for i in range(2,max_it):
+            likelies = {cog : self.__core_likely(cog, complet = "new", core_size = core_len) for cog in self.cogCounts}
             self.core = set([c for c, v in likelies.items() if v > 1])
             new_core_len = len(self.core)
             for mag in self:
                 mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
-            print("iteration",i, ": ", new_core_len)
+            if VERBOSE:
+                print("iteration",i, ": ", new_core_len)
             if new_core_len == core_len:
-                break
+               break
             else :
                 core_len =new_core_len
+        if VERBOSE:
+            print("Mean checkM completeness", mean([b.checkm_complet for b in self]), ", mean new_completness",  mean([b.new_completness for b in self]))
+        self.iterations = i -1
         return likelies
 
     def __core_prob(self, cog, complet = "checkm"):
@@ -118,16 +158,31 @@ class mOTU:
         abscence = [1 - comp(mag) for mag in self if cog not in mag.cogs]
         return prod(presence + abscence)
 
-    def __pange_prob(self, cog, pool, core_size, complet = "checkm"):
-        pool_size = sum(pool.values())
+    def __pange_prob(self, cog, core_size, complet = "checkm"):
+        pool_size = sum(self.cogCounts.values())
         comp = lambda mag : (mag.checkm_complet if complet =="checkm" else mag.new_completness)/100
-        presence = [1 - (1-pool[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog in mag.cogs]
-        abscence = [ (1-pool[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog not in mag.cogs]
+        presence = [1 - (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog in mag.cogs]
+        abscence = [ (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog not in mag.cogs]
         return prod(presence + abscence)
 
-    def __core_likely(self, cog, pool, complet = "checkm", core_size = 0):
-        pange_prob = self.__pange_prob(cog, pool, core_size, complet)
+    def __core_likely(self, cog, complet = "checkm", core_size = 0):
+        pange_prob = self.__pange_prob(cog, core_size, complet)
         if pange_prob != 0:
             return self.__core_prob(cog, complet)/pange_prob
         else :
             return inf
+
+    def nb_cogs(self):
+        return mean([b.estimate_nb_cogs() for b in self if b.new_completness > 40 ])
+
+    def get_pangenome_size(self, singletons = False):
+        return len([k for k,v in self.cogCounts.items() if k not in self.core and v > (0 if singletons else 1)])
+
+    def count_distribution(self):
+        counts = { i : 0 for i in range(1,len(self)+1) }
+        for k,v in self.cogCounts.items():
+            if k in self.core:
+                counts[len(self)] += 1
+            else :
+                counts[v] +=1
+        return counts

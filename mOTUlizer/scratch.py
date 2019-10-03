@@ -18,6 +18,9 @@ def main():
     with open("test_data/mag2cog.tsv") as handle:
         mag2cog = {l.split()[0] : l[:-1].split()[1:] for l in handle}
 
+    with open("test_data/fastani.tsv") as handle:
+        ani_dict = {( l.split()[0], l.split()[1] ) : float(l.split()[2]) for l in handle}
+
     data_pack = {'mag2cog' : mag2cog, 'taxonomy' : taxonomy, 'stats' : stats, 'base_folder' : "/home/moritz/repos/moritz/0039_mOTUlizer/test_data/"}
 
     otu_list = []
@@ -25,12 +28,17 @@ def main():
         for l in handle:
             name = l.split()[0]
             bins = l.split()[1].split(";")
-            otu_list += [ mOTU( name = name, members = bins, data_pack = data_pack) ]
+            print("processing", name )
+            if len(bins) > 3 :
+                otu_list += [ mOTU( name = name, members = bins, data_pack = data_pack, precomp_ani = ani_dict)]
 
-    for otu in otu_list:
-        if len(otu) > 3:
-            print(otu)
-            otu.core_likelyhood()
+
+    otu_stats = [otu.get_otu_stats() for otu in tqdm(otu_list)]
+    pandas.DataFrame.from_records(otu_stats, index="otu").to_csv("test.stats")
+
+    count_stats = sum([otu.get_count_stats() for otu in tqdm(otu_list)],[])
+    pandas.DataFrame.from_records(count_stats).to_csv("counts.stats")
+
 
 if __name__ == "__main__":
     main()
