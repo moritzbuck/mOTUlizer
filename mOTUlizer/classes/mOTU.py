@@ -1,10 +1,12 @@
 from mOTUlizer.classes.MetaBin import MetaBin
-from numpy import mean, prod
+from numpy import mean, prod, std
 import subprocess
 import tempfile
 import os
 from mOTUlizer.config import *
 from numpy import inf
+from random import shuffle
+import pandas
 
 class mOTU:
     def __len__(self):
@@ -186,3 +188,39 @@ class mOTU:
             else :
                 counts[v] +=1
         return counts
+
+    def rarefy_pangenome(self, reps = 100, singletons = False):
+        def __min_95(ll):
+            ll.sort_values()
+            return list(ll.sort_values())[round(len(ll)*0.05)]
+
+        def __max_95(ll):
+            ll.sort_values()
+            return list(ll.sort_values())[round(len(ll)*0.95)]
+
+        def __genome_count(ll):
+            return ll[0]
+
+        __genome_count.__name__ = "genome_count"
+        __max_95.__name__ = "max_95"
+        __min_95.__name__ = "min_95"
+
+        pange = {k for k,v in self.cogCounts.items() if k not in self.core and v > (0 if singletons else 1)}
+        series = []
+        for i in range(reps):
+            series += [{ 'rep' : i , 'genome_count' : 0, 'pangenome_size' : 0}]
+            m = self.members.copy()
+            shuffle(m)
+            founds = set()
+            for j,mm in enumerate(m):
+                founds = founds.union(mm.cogs.intersection(pange))
+                series += [{ 'rep' : i , 'genome_count' : j+1, 'pangenome_size' : len(founds)}]
+
+        t_pandas = pandas.DataFrame.from_records(series)[['genome_count', 'pangenome_size']]
+        t_pandas = t_pandas.groupby('genome_count').agg({'genome_count' : [__genome_count] ,'pangenome_size' : [mean, std, __min_95, __max_95]} )
+        t_pandas.columns = ["rr_" + p[1] for p in t_pandas.columns]
+        t_pandas = t_pandas.to_dict(orient="index")
+        tt = self.get_otu_stats()
+        for v in t_pandas.values():
+            v.update(tt)
+        return t_pandas
