@@ -1,12 +1,13 @@
 from mOTUlizer.classes.MetaBin import MetaBin
-from numpy import mean, prod, std
+from numpy import mean, prod, std, ceil
 import subprocess
 import tempfile
 import os
 from mOTUlizer.config import *
 from numpy import inf
-from random import shuffle
+from random import shuffle, choice
 import pandas
+from tqdm import tqdm
 
 class mOTU:
     def __len__(self):
@@ -189,7 +190,46 @@ class mOTU:
                 counts[v] +=1
         return counts
 
-    def rarefy_pangenome(self, reps = 100, singletons = False):
+
+    def simulate_rarefaction(self, reps = 100, genomes = 1000):
+        cog_pool = [k for k, v in self.cogCounts.items() for i in range(v) if k not in self.core]
+        nosings_cog_pool = [k for k, v in self.cogCounts.items() for i in range(v) if k not in self.core and v > 1]
+        draws = self.nb_cogs()-len(self.core)
+        series = []
+        for rep in tqdm(range(reps)):
+            random_auxs = [{choice(cog_pool) for i in range(int(ceil(draws)))} for m in range(genomes)]
+            tt = self.rarefy_pangenome(custom_cogs = random_auxs)
+            for k, v in tt.items():
+                v['rep_sim'] = rep
+                v['singletons'] = False
+                v['sim'] = True
+            series += list(tt.values())
+
+            random_auxs = [{choice(nosings_cog_pool) for i in range(int(ceil(draws)))} for m in range(genomes)]
+            tt = self.rarefy_pangenome(custom_cogs = random_auxs)
+            for k, v in tt.items():
+                v['rep_sim'] = rep
+                v['singletons'] = True
+                v['sim'] = True
+            series += list(tt.values())
+
+        tt = self.rarefy_pangenome()
+        for k, v in tt.items():
+                v['rep_sim'] = -1
+                v['singletons'] = False
+                v['sim'] = False
+        series += list(tt.values())
+
+        tt = self.rarefy_pangenome(singletons = True)
+        for k, v in tt.items():
+                v['rep_sim'] = -1
+                v['singletons'] = True
+                v['sim'] = False
+        series += list(tt.values())
+        return series
+
+
+    def rarefy_pangenome(self, reps = 100, singletons = False, custom_cogs = None):
         def __min_95(ll):
             ll.sort_values()
             return list(ll.sort_values())[round(len(ll)*0.05)]
@@ -205,15 +245,15 @@ class mOTU:
         __max_95.__name__ = "max_95"
         __min_95.__name__ = "min_95"
 
-        pange = {k for k,v in self.cogCounts.items() if k not in self.core and v > (0 if singletons else 1)}
+        pange = set.union(*custom_cogs) if custom_cogs else {k for k,v in self.cogCounts.items() if k not in self.core and v > (0 if singletons else 1)}
         series = []
         for i in range(reps):
             series += [{ 'rep' : i , 'genome_count' : 0, 'pangenome_size' : 0}]
-            m = self.members.copy()
+            m = custom_cogs if custom_cogs else [m.cogs for m in self.members.copy()]
             shuffle(m)
             founds = set()
             for j,mm in enumerate(m):
-                founds = founds.union(mm.cogs.intersection(pange))
+                founds = founds.union(mm.intersection(pange))
                 series += [{ 'rep' : i , 'genome_count' : j+1, 'pangenome_size' : len(founds)}]
 
         t_pandas = pandas.DataFrame.from_records(series)[['genome_count', 'pangenome_size']]
