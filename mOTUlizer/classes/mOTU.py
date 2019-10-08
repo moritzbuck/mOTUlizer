@@ -21,8 +21,7 @@ class mOTU:
         self.members = [MetaBin(m, **data_pack) for m in members]
         self.core = None
         self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
-        print("Counting cogs")
-        for mag in tqdm(self.members):
+        for mag in self.members:
             for cog in mag.cogs:
                     self.cogCounts[cog] += 1
         non_singles = {c for c,v in self.cogCounts.items() if v > 1}
@@ -131,8 +130,7 @@ class mOTU:
         return out_dat
 
     def __core_likelyhood(self, max_it = 10):
-        print("Computing lieklihoods:")
-        likelies = {cog : self.__core_likely(cog) for cog in tqdm(self.cogCounts)}
+        likelies = {cog : self.__core_likely(cog) for cog in self.cogCounts}
         self.core = set([c for c, v in likelies.items() if v > 1])
         core_len = len(self.core)
         i = 1
