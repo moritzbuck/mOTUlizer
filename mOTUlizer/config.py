@@ -1,2 +1,2 @@
 THREADS = 4
-VERBOSE = True
+VERBOSE = False

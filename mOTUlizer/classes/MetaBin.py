@@ -14,6 +14,7 @@ class MetaBin:
         self.nb_contig = stats.loc[self.name, "nb_contigs"]
         self.nb_prots = stats.loc[self.name, "nb_proteins"]
         self.checkm_complet = stats.loc[self.name, "completeness"]
+        self.checkm_complet = self.checkm_complet if self.checkm_complet < 95 else 95
         self.checkm_contam = stats.loc[self.name, "contamination"]
         self.checkm_hetero = stats.loc[self.name, "strain_heterogeneity"]
         self.proteom = pjoin(base_folder, "proteoms", name + ".faa")
