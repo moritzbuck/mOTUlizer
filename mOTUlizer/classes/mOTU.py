@@ -18,39 +18,15 @@ class mOTU:
 
     def __init__(self, name, members, data_pack, precomp_ani = None, funct_derep = 0.95, min_complet = 70):
         self.name = name
-        self.full_members = [MetaBin(m, **data_pack) for m in members]
+        self.members = [MetaBin(m, **data_pack) for m in members]
         self.core = None
-        self.full_cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.full_members])}
+        self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
         print("Counting cogs")
-        for mag in tqdm(self.full_members):
+        for mag in tqdm(self.members):
             for cog in mag.cogs:
-                    self.full_cogCounts[cog] += 1
-        non_singles = {c for c,v in self.full_cogCounts.items() if v > 1}
-        print("Remove singletons:")
-        stricts = {g : g.cogs.intersection(non_singles) for g in tqdm(self.full_members)}
-        stricts = sorted(stricts.items(), key = lambda x : len(x[1]), reverse=True)
-        kept = []
-        print("Derepping:")
-        for i,  v in tqdm(enumerate(stricts)):
-            found = 0
-            for w in kept:
-                if len(v[1].intersection(stricts[w][1]))/len(v[1]) > funct_derep:
-                    found += 1
-                    break
-            if found == 0:
-                kept += [i]
-                print("Added one, ", len(kept), "members now.")
-        self.members = [v[0] for i, v in enumerate(stricts) if i in kept and v[0].checkm_complet >70]
-        if len(self.members) > 0 :
-            self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
-            for mag in self.members:
-                for cog in mag.cogs:
-                        self.cogCounts[cog] += 1
-
-            self.likelies = self.__core_likelyhood()
-        else :
-            self.cogCounts = {}
-            self.likelies = {}
+                    self.cogCounts[cog] += 1
+        non_singles = {c for c,v in self.cogCounts.items() if v > 1}
+        self.likelies = self.__core_likelyhood()
         if precomp_ani:
             memb_dict = {m.name : m for m in self}
             self.fastani_dict = { (a,b) : precomp_ani[(a,b)] for a in memb_dict for b in memb_dict if a != b  and(a,b) in precomp_ani }
@@ -164,6 +140,7 @@ class mOTU:
             print("iteration 1 : ", core_len )
         for mag in self:
             mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
+            mag.new_completness = mag.new_completness if mag.new_completness < 95 else 95
         for i in range(2,max_it):
             likelies = {cog : self.__core_likely(cog, complet = "new", core_size = core_len) for cog in self.cogCounts}
             self.core = set([c for c, v in likelies.items() if v > 1])

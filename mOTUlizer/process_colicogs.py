@@ -27,7 +27,7 @@ def main():
 
     data_pack = {'mag2cog' : mag2cog, 'taxonomy' : taxonomy, 'stats' : stats, 'base_folder' : "/home/moritz/repos/moritz/0039_mOTUlizer/test_data/"}
 
-    otu = mOTU( name = "EColi", members = list(mag2cog.keys()), data_pack = data_pack, precomp_ani = ani_dict, funct_derep = 0.99)
+    otu = mOTU( name = "EColi", members = list(mag2cog.keys()), data_pack = data_pack, precomp_ani = ani_dict, funct_derep = 0.95)
 
 
     out_dir = "outputs/" + input_file.split("ani_")[-1][:-4]
