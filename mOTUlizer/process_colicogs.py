@@ -1,6 +1,4 @@
 
-
-
 def main():
     import os
     import pandas
@@ -13,30 +11,23 @@ def main():
     from mOTUlizer.classes.mOTU import mOTU
     from tqdm import tqdm
 
+    print("Loading stats")
+    stats = pandas.read_csv("/home/moritz/temp/cores/ecolis_magstats.csv", index_col = 0)
 
-    input_file = "test_data/mOTUs.txt"
+    print("Loading taxonomy")
+    taxonomy = {l : "Bacteria;Proteobacteria;Gammaproteobacteria;Enterobacterales;Enterobacteriaceae;Escherichia;Escherichia coli".split(";") for l in stats.index}
 
-    stats = pandas.read_csv("test_data/magstats.csv", index_col = 0)
+    print("Loading cogs")
+    with open("/home/moritz/temp/cores/ecolis_mags2cogs.csv") as handle:
+        handle.readline()
+        mag2cog = {l.split()[0] : l[:-1].split()[1].split(";") for l in handle if len(l[:-1].split()[1:]) > 0 }
 
-    with open("test_data/taxonomy.tax") as handle:
-        taxonomy = {l.split(",")[0] : l[:-1].split(",")[1:] for l in handle}
-
-    with open("test_data/mag2cog.tsv") as handle:
-        mag2cog = {l.split()[0] : l[:-1].split()[1:] for l in handle}
-
-    with open("test_data/fastani.tsv") as handle:
-        ani_dict = {( l.split()[0], l.split()[1] ) : float(l.split()[2]) for l in handle}
+    print("Loading ANIs")
+    ani_dict = {}
 
     data_pack = {'mag2cog' : mag2cog, 'taxonomy' : taxonomy, 'stats' : stats, 'base_folder' : "/home/moritz/repos/moritz/0039_mOTUlizer/test_data/"}
 
-    otu_list = []
-    with open(input_file) as handle:
-        for i,l in enumerate(handle):
-                name = l.split()[0]
-                bins = l.split()[1].split(";")
-                print("processing", name )
-                if len(bins) > 3 :
-                    otu_list += [ mOTU( name = name, members = bins, data_pack = data_pack, precomp_ani = ani_dict, funct_derep = 0.99)]
+    otu = mOTU( name = "EColi", members = list(mag2cog.keys()), data_pack = data_pack, precomp_ani = ani_dict, funct_derep = 0.99)
 
 
     out_dir = "outputs/" + input_file.split("ani_")[-1][:-4]
