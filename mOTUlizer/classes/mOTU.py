@@ -8,6 +8,8 @@ from numpy import inf
 from random import shuffle, choice
 import pandas
 from tqdm import tqdm
+from numpy import log10
+from scipy.stats import hypergeom
 
 class mOTU:
     def __len__(self):
@@ -129,24 +131,24 @@ class mOTU:
             out_dat += [tt]
         return out_dat
 
-    def __core_likelyhood(self, max_it = 10):
-        likelies = {cog : self.__core_likely(cog) for cog in self.cogCounts}
-        self.core = set([c for c, v in likelies.items() if v > 1])
+    def __core_likelyhood(self, max_it = 20):
+        likelies = {cog : self.__core_likely(cog) for cog in vtqdm(self.cogCounts)}
+        self.core = set([c for c, v in likelies.items() if v > 0])
         core_len = len(self.core)
         i = 1
         if VERBOSE:
-            print("iteration 1 : ", core_len )
+            print("iteration 1 : ", core_len, "LHR:" , sum(likelies.values()) )
         for mag in self:
             mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
-            mag.new_completness = mag.new_completness if mag.new_completness < 95 else 95
+            mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
         for i in range(2,max_it):
-            likelies = {cog : self.__core_likely(cog, complet = "new", core_size = core_len) for cog in self.cogCounts}
-            self.core = set([c for c, v in likelies.items() if v > 1])
+            likelies = {cog : self.__core_likely(cog, complet = "new", core_size = core_len) for cog in vtqdm(self.cogCounts)}
+            self.core = set([c for c, v in likelies.items() if v > 0])
             new_core_len = len(self.core)
             for mag in self:
                 mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
             if VERBOSE:
-                print("iteration",i, ": ", new_core_len)
+                print("iteration",i, ": ", new_core_len, "LHR:" , sum(likelies.values()))
             if new_core_len == core_len:
                break
             else :
@@ -158,23 +160,31 @@ class mOTU:
 
     def __core_prob(self, cog, complet = "checkm"):
         comp = lambda mag : (mag.checkm_complet if complet =="checkm" else mag.new_completness)/100
-        presence = [comp(mag) for mag in self if cog in mag.cogs]
-        abscence = [1 - comp(mag) for mag in self if cog not in mag.cogs]
-        return prod(presence + abscence)
+        presence = [log10(comp(mag)) for mag in self if cog in mag.cogs]
+        abscence = [log10(1 - comp(mag)) for mag in self if cog not in mag.cogs]
+        return sum(presence + abscence)
 
     def __pange_prob(self, cog, core_size, complet = "checkm"):
         pool_size = sum(self.cogCounts.values())
         comp = lambda mag : (mag.checkm_complet if complet =="checkm" else mag.new_completness)/100
-        presence = [1 - (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog in mag.cogs]
-        abscence = [ (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog not in mag.cogs]
-        return prod(presence + abscence)
+        #presence = [1 - (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog in mag.cogs]
+        #abscence = [ (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog not in mag.cogs]
+
+#        presence = [ log10(1 -   ( 1 - 1/len(self.cogCounts))**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog in mag.cogs]
+#        abscence = [       log10(( 1 - 1/len(self.cogCounts))**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog not in mag.cogs]
+
+        presence = [ log10(1 -   ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog in mag.cogs]
+        abscence = [       log10(( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog not in mag.cogs]
+
+
+        #abscence = [ 1-self.cogCounts[cog]/len(self)*comp(mag) for mag in self if cog not in mag.cogs]
+        #presence = [ self.cogCounts[cog]/len(self)*comp(mag) for mag in self if cog not in mag.cogs]
+
+        return sum(presence + abscence)
 
     def __core_likely(self, cog, complet = "checkm", core_size = 0):
         pange_prob = self.__pange_prob(cog, core_size, complet)
-        if pange_prob != 0:
-            return self.__core_prob(cog, complet)/pange_prob
-        else :
-            return inf
+        return self.__core_prob(cog, complet) - pange_prob
 
     def nb_cogs(self):
         return mean([b.estimate_nb_cogs() for b in self if b.new_completness > 40 ])
@@ -265,3 +275,33 @@ class mOTU:
         for v in t_pandas.values():
             v.update(tt)
         return t_pandas
+
+    def annot_partition(self, cog2annot, annotation = "COG_functional_cat"):
+        annot = {}
+        annot['core'] = [cog2annot.get(c,{}).get(annotation) for c in  self.core]
+        annot['nosingle_pan'] = [cog2annot.get(c,{}).get(annotation) for c,v in  self.cogCounts.items() if c not in self.core and v > 1]
+        annot['singletons'] = [cog2annot.get(c,{}).get(annotation) for c,v in  self.cogCounts.items() if c not in self.core and v == 1]
+        noannot_fract = {k : len(v) - len([vv for vv in v if vv]) for k,v in annot.items()}
+        annot = {k : [vv for vv in v if vv] for k,v in annot.items()}
+        annot_sum = {}
+        for type,v in annot.items():
+            if annotation == "COG_functional_cat" :
+                counts = {kk : 0 for vv in v if vv for k in vv for kk in k}
+            else :
+                counts = {k : 0 for vv in v if vv for k in vv}
+            for vv in v:
+                for k, vvv in vv.items():
+                    if annotation == "COG_functional_cat" :
+                        for kk in k:
+                            counts[kk] += vvv
+                    else :
+                        counts[k] += vvv
+            counts['no_annot'] = noannot_fract[type]
+            annot_sum[type] = {ano : round(count) for ano, count in counts.items() if round(count)> 0 }
+
+        all_annots = {vv for k, v in annot_sum.items() for vv in v}
+        pool_size = sum([v > 1 for v in self.cogCounts.values()])
+        nosingle_pan_size = sum([v > 1 for k,v in self.cogCounts.items() if k not in self.core])
+        pvalues = { k : hypergeom.sf(k = annot_sum['nosingle_pan'].get(k,0), M = pool_size, n = annot_sum['core'].get(k,0) + annot_sum['nosingle_pan'].get(k,0) , N = nosingle_pan_size ) for k in all_annots}
+
+        return {'counts' : annot_sum, 'pvals' : pvalues}
