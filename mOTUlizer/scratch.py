@@ -7,8 +7,10 @@ def main():
     import shutil
     import sys
     from os.path import join as pjoin
+    import json
 
     sys.path += ["/home/moritz/repos/moritz/0039_mOTUlizer"]
+    sys.path += ["/home/moritz/repos/moritz/0042_emapper2json"]
 
     from mOTUlizer.classes.mOTU import mOTU
     from tqdm import tqdm
@@ -27,6 +29,11 @@ def main():
     with open("test_data/fastani.tsv") as handle:
         ani_dict = {( l.split()[0], l.split()[1] ) : float(l.split()[2]) for l in handle}
 
+    print("Loading annotations")
+    with open("/home/moritz/temp/cores/cog2annot.json") as handle:
+        cog2annot = json.load(handle)
+
+
     data_pack = {'mag2cog' : mag2cog, 'taxonomy' : taxonomy, 'stats' : stats, 'base_folder' : "/home/moritz/repos/moritz/0039_mOTUlizer/test_data/"}
 
     otu_list = []
@@ -36,7 +43,7 @@ def main():
                 bins = l.split()[1].split(";")
                 print("processing", name )
                 if len(bins) > 3 :
-                    otu_list += [ mOTU( name = name, members = bins, data_pack = data_pack, precomp_ani = ani_dict, funct_derep = 0.99)]
+                    otu_list += [ mOTU( name = name, members = bins, data_pack = data_pack, precomp_ani = ani_dict)]
 
 
     out_dir = "outputs/" + input_file.split("ani_")[-1][:-4]
