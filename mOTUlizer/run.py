@@ -23,33 +23,37 @@ def main():
     sys.path += ["/home/moritz/repos/moritz/0042_emapper2json"]
 
     from mOTUlizer.classes.mOTU import mOTU
+    from mOTUlizer.config import *
+
     from tqdm import tqdm
-    from emapper2json import _COG_CATS_
+    from emapper2json import _COG_CATS_, get_blocks
 
     input_file = sys.argv[1]
+    input_data_folder = sys.argv[2]
+# /home/moritz/temp/cores
 
     print("Loading stats")
-    stats = pandas.read_csv("/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/magstats.csv", index_col = 0)
+    stats = pandas.read_csv(input_data_folder  + "/magstats.csv", index_col = 0)
 
     print("Loading taxonomy")
-    with open("/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/full_taxonomy.tax") as handle:
+    with open(input_data_folder , "/full_taxonomy.tax") as handle:
         taxonomy = {l.split(",")[0] : l[:-1].split(",")[1:] for l in handle}
 
     print("Loading cogs")
-    with open("/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/mags/mag2cogs.tsv") as handle:
+    with open(input_data_folder  + "/mag2cogs.tsv") as handle:
         mag2cog = {l.split()[0] : l[:-1].split()[1:] for l in handle}
 
     print("Loading ANIs")
-    with open("/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/mags/fastani_pairs.csv") as handle:
+    with open(input_data_folder  + "/fastani_pairs.csv") as handle:
         handle.readline()
         ani_dict = {( l.split()[0], l.split()[1] ) : float(l.split()[2]) for l in handle}
 
     print("Loading annotations")
-    with open("/home/moritz/temp/cores/cog2annot.json") as handle:
+    with open(input_data_folder  + "/cog2annot.json") as handle:
         cog2annot = json.load(handle)
 
     print("Loading kegg_paths")
-    with open("/home/moritz/dbs/ec2kegg/kegg_maps.txt") as handle:
+    with open( DB_FOLDER + "/ec2kegg/kegg_maps.txt") as handle:
         kegg2name = {}
         lines = handle.readlines()
         for l in lines:
@@ -58,7 +62,7 @@ def main():
                 kegg2name["ko" + l.split()[0]] = " ".join(l.split()[1:])
 
     print("Loading gonames")
-    with open("/home/moritz/dbs/go.obo") as handle:
+    with open(DB_FOLDER + "/go.obo") as handle:
         go2name = {}
         for l in handle:
             if l.startswith("id: "):
@@ -66,6 +70,17 @@ def main():
             if l.startswith("name: "):
                 go2name[go] = " ".join(l.split()[1:])
 
+    print("Loading kegg_paths")
+    module2name = {}
+    module2def = {}
+    for m in os.listdir(DB_FOLDER + "/ec2kegg/modules"):
+        with open(DB_FOLDER + "/ec2kegg/modules/" + m) as handle:
+            lines = handle.readlines()
+            for l in lines:
+                if l.startswith("DEFINITION"):
+                    module2def[m] = " ".join(l.split()[1:])
+                if l.startswith("NAME"):
+                    module2name[m] = " ".join(l.split()[1:])
 
     data_pack = {'mag2cog' : mag2cog, 'taxonomy' : taxonomy, 'stats' : stats, 'base_folder' : "/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/mags/"}
 
@@ -80,35 +95,11 @@ def main():
                 if len(bins) > 5 :
                     otu_list += [ mOTU( name = name, members = bins, data_pack = data_pack, precomp_ani = ani_dict, funct_derep = 0.95)]
 
-    pvs = {(otu.name, k.replace("ko","map")) : v  for otu in otu_list for k,v in otu.annot_partition(cog2annot=cog2annot, annotation = "KEGG_Pathway")['pvals'].items()}
-    pvs = {k : v for k, v in zip(pvs.keys(),multipletests(list(pvs.values()), method = 'fdr_bh')[1]) if v < 0.001}
-    counts = {v : 0 for k, v in pvs.keys()}
-    for k,v in pvs.items():
-        counts[k[1]] += 1
-    kegg_hits = sorted({kegg2name.get(k, k) :  v for k,v in counts.items() if v > 10}.items(), key = lambda x: x[1])
-
-    pvs = {(otu.name, k.replace("ko","map")) : 1-v  for otu in otu_list for k,v in otu.annot_partition(cog2annot=cog2annot, annotation = "KEGG_Pathway")['pvals'].items()}
-    pvs = {k : v for k, v in zip(pvs.keys(),multipletests(list(pvs.values()), method = 'fdr_bh')[1]) if v > 0.001}
-    counts = {v : 0 for k, v in pvs.keys()}
-    for k,v in pvs.items():
-        counts[k[1]] += 1
+    otu2mods = {(otu.name, k) : v for otu in tqdm(otu_list) for k,v in get_kos(otu,cog2annot).items()}
 
 
-    pvs = {(otu.name, k) : v  for otu in otu_list for k,v in otu.annot_partition(cog2annot=cog2annot, annotation = "GOs")['pvals'].items()}
-    pvs = {k : v for k, v in zip(pvs.keys(),multipletests(list(pvs.values()), method = 'fdr_bh')[1]) if v < 0.001}
-    counts = {v : 0 for k, v in pvs.keys()}
-    for k,v in pvs.items():
-        counts[k[1]] += 1
-    sorted({go2name.get(k,k):  v for k,v in counts.items() if v > 10}.items(), key = lambda x: x[1])[-50:]
 
-    pvs = {(otu.name, k) : v  for otu in otu_list for k,v in otu.annot_partition(cog2annot=cog2annot)['pvals'].items()}
-    pvs = {k : v for k, v in zip(pvs.keys(),multipletests(list(pvs.values()), method = 'fdr_bh')[1]) if v < 0.001}
-    counts = {v : 0 for k, v in pvs.keys()}
-    for k,v in pvs.items():
-        counts[k[1]] += 1
-    sorted({_COG_CATS_.get(k,k):  v for k,v in counts.items() if v > 10}.items(), key = lambda x: x[1])[-50:]
-
-
+    pandas.DataFrame.from_dict({otu.name + "_" + k : v  for otu in otu_list for k, v in otu.annot_partition(cog2annot=cog2annot, annotation = "GOs")['counts'].items() }).transpose().fillna(0).to_csv("COG_cats.csv")
 
     out_dir = "outputs/" + input_file.split("ani_")[-1][:-4]
 
@@ -128,6 +119,9 @@ def main():
     single_rarefy_stats['singletons'] = True
     rarefy_stats = rarefy_stats.append(single_rarefy_stats)
     rarefy_stats.to_csv(pjoin(out_dir,"rarefy.stats"))
+
+
+
 
 if __name__ == "__main__":
     main()

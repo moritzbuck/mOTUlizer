@@ -65,5 +65,36 @@ def main():
     rarefy_stats = rarefy_stats.append(single_rarefy_stats)
     rarefy_stats.to_csv(pjoin(out_dir,"rarefy.stats"))
 
+
+    pvs = {(otu.name, k.replace("ko","map")) : v  for otu in otu_list for k,v in otu.annot_partition(cog2annot=cog2annot, annotation = "KEGG_Pathway")['pvals'].items()}
+    pvs = {k : v for k, v in zip(pvs.keys(),multipletests(list(pvs.values()), method = 'fdr_bh')[1]) if v < 0.001}
+    counts = {v : 0 for k, v in pvs.keys()}
+    for k,v in pvs.items():
+        counts[k[1]] += 1
+    kegg_hits = sorted({kegg2name.get(k, k) :  v for k,v in counts.items() if v > 10}.items(), key = lambda x: x[1])
+
+    pvs = {(otu.name, k.replace("ko","map")) : 1-v  for otu in otu_list for k,v in otu.annot_partition(cog2annot=cog2annot, annotation = "KEGG_Pathway")['pvals'].items()}
+    pvs = {k : v for k, v in zip(pvs.keys(),multipletests(list(pvs.values()), method = 'fdr_bh')[1]) if v > 0.001}
+    counts = {v : 0 for k, v in pvs.keys()}
+    for k,v in pvs.items():
+        counts[k[1]] += 1
+
+
+    pvs = {(otu.name, k) : v  for otu in otu_list for k,v in otu.annot_partition(cog2annot=cog2annot, annotation = "GOs")['pvals'].items()}
+    pvs = {k : v for k, v in zip(pvs.keys(),multipletests(list(pvs.values()), method = 'fdr_bh')[1]) if v < 0.001}
+    counts = {v : 0 for k, v in pvs.keys()}
+    for k,v in pvs.items():
+        counts[k[1]] += 1
+    sorted({go2name.get(k,k):  v for k,v in counts.items() if v > 10}.items(), key = lambda x: x[1])[-50:]
+
+    pvs = {(otu.name, k) : v  for otu in otu_list for k,v in otu.annot_partition(cog2annot=cog2annot)['pvals'].items()}
+    pvs = {k : v for k, v in zip(pvs.keys(),multipletests(list(pvs.values()), method = 'fdr_bh')[1]) if v < 0.001}
+    counts = {v : 0 for k, v in pvs.keys()}
+    for k,v in pvs.items():
+        counts[k[1]] += 1
+    sorted({_COG_CATS_.get(k,k):  v for k,v in counts.items() if v > 10}.items(), key = lambda x: x[1])[-50:]
+
+
+
 if __name__ == "__main__":
     main()
