@@ -11,6 +11,11 @@ from tqdm import tqdm
 from numpy import log10
 from scipy.stats import hypergeom
 
+sys.path += ["/home/moritz/repos/moritz/0042_emapper2json"]
+
+from emapper2json import _COG_CATS_, get_blocks
+
+
 class mOTU:
     def __len__(self):
         return len(self.members)

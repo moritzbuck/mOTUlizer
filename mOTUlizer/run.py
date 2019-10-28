@@ -36,20 +36,20 @@ def main():
     stats = pandas.read_csv(input_data_folder  + "/magstats.csv", index_col = 0)
 
     print("Loading taxonomy")
-    with open("/full_taxonomy.tax") as handle:
+    with open(input_data_folder  +  "/full_taxonomy.tax") as handle:
         taxonomy = {l.split(",")[0] : l[:-1].split(",")[1:] for l in handle}
 
     print("Loading cogs")
-    with open(input_data_folder  + "/mag2cogs.tsv") as handle:
+    with open(input_data_folder  + "/mags/mag2cogs.tsv") as handle:
         mag2cog = {l.split()[0] : l[:-1].split()[1:] for l in handle}
 
     print("Loading ANIs")
-    with open(input_data_folder  + "/fastani_pairs.csv") as handle:
+    with open(input_data_folder  + "/mags/fastani_pairs.csv") as handle:
         handle.readline()
         ani_dict = {( l.split()[0], l.split()[1] ) : float(l.split()[2]) for l in handle}
 
     print("Loading annotations")
-    with open(input_data_folder  + "/cog2annot.json") as handle:
+    with open(input_data_folder  + "/proteomics/cog2annot.json") as handle:
         cog2annot = json.load(handle)
 
     print("Loading kegg_paths")
@@ -90,10 +90,10 @@ def main():
                 name = l.split()[0]
                 bins = l.split()[1].split(";")
 #                print("processing", name )
-                if len(bins) > 5 :
+                if len(bins) > 3 :
                     otu_list += [ mOTU( name = name, members = bins, data_pack = data_pack, precomp_ani = ani_dict, funct_derep = 0.99)]
 
-    otu2mods = {(otu.name, k) : v for otu in tqdm(otu_list) for k,v in get_kos(otu,cog2annot).items()}
+    otu2mods = {(otu.name, k) : v for otu in tqdm(otu_list) for k,v in otu.get_kos(cog2annot, module2def).items()}
 
 
 
