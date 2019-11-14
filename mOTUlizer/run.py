@@ -36,7 +36,7 @@ def main():
     stats = pandas.read_csv(input_data_folder  + "/magstats.csv", index_col = 0)
 
     print("Loading taxonomy")
-    with open(input_data_folder  +  "/full_taxonomy.tax") as handle:
+    with open(input_data_folder , "/full_taxonomy.tax") as handle:
         taxonomy = {l.split(",")[0] : l[:-1].split(",")[1:] for l in handle}
 
     print("Loading cogs")
@@ -83,11 +83,13 @@ def main():
                 if l.startswith("NAME"):
                     module2name[m] = " ".join(l.split()[1:])
 
-    data_pack = {'mag2cog' : mag2cog, 'taxonomy' : taxonomy, 'stats' : stats, 'base_folder' : "/home/moritz/repos/moritz/0039_mOTUlizer/test_data/"}
+    data_pack = {'mag2cog' : mag2cog, 'taxonomy' : taxonomy, 'stats' : stats, 'base_folder' : "/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/mags/"}
+
 
     otu_list = []
     with open(input_file) as handle:
         for i,l in tqdm(enumerate(handle)):
+            if i < 10:
                 name = l.split()[0]
                 bins = l.split()[1].split(";")
 #                print("processing", name )

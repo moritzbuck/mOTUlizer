@@ -10,6 +10,8 @@ import pandas
 from tqdm import tqdm
 from numpy import log10
 from scipy.stats import hypergeom
+import sys
+
 
 sys.path += ["/home/moritz/repos/moritz/0042_emapper2json"]
 
