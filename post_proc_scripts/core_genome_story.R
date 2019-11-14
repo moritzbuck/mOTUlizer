@@ -148,5 +148,41 @@ dd = merge(dd,whole_data$otus_95_70$data, by.x = "otu_id", by.y = "otu")
 dd2 = copy(dd)
 dd2[, phylum := NULL]
 
+dd2[, family := NULL]
 
 ggplot(dd[otu_per_phylum > 3], aes(x=MDS1, y=MDS2, col = paste0(phylum,class, sep =";"), label = otu, size=mean_cog_count))+geom_point(data = dd2, col="black", alpha=0.1)+ geom_point()+scale_color_manual(values=as.vector(iwanthue(length(unique(whole_data$otus_95_70$data[otu_per_phylum > 3]$class)))))+facet_wrap(~phylum)+xlim(-0.1,0.1)+ylim(-0.1,0.1)
+
+
+goperset = fread("COG_cats.csv")
+bla = goperset[,Filter(is.numeric, .SD)]
+setkey(whole_data$otus_95_70$data, "otu")
+ colnames(bla) = COG_CATS[ colnames(bla)]
+tokeep = colnames(bla)[colnames(bla) != "no_annot"]
+bla = bla[,..tokeep ]
+otus = goperset$V1
+otus = otus[rowSums(bla) > 0]
+bla = bla[rowSums(bla) > 0,]
+bla = bla[!grepl("_nosingle_pan",  otus)]
+otus = otus[!grepl("_nosingle_pan",  otus)]
+#otus = otus[rowSums(bla) > 50]
+#bla = bla[rowSums(bla) > 50]
+
+bla = bla/whole_data$otus_95_70$data[sub("_singletons", "", sub("_nosingle_pan","",sub("_core","", otus)))]$core_size
+#bla = bla[!startsWith(otus,"aniOTU_78_")]
+#otus = otus[!startsWith(otus,"aniOTU_78_")]
+#bla = bla[,colSums(bla > 0 )>100, with = FALSE]
+#bla = bla[,colnames(bla) != "Function Unknown", with = FALSE]
+
+
+mds = metaMDS(bla, maxit = 100, weakties = TRUE, dist = "euclidean", trymax=40, k=2)
+dd = data.table(mds$point)
+dd$otu = otus
+dd[, type := sapply(strsplit(otu,"_"), "[", 3)]
+specs = data.table(mds$species)
+specs$otu = colnames(bla)
+dd[, otu_id := sub("_singletons","", sub("_nosingle_pan", "", sub("_core","", otu))) ]
+dd = merge(dd,whole_data$otus_95_70$data, by.x = "otu_id", by.y = "otu")
+dd2 = copy(dd)
+dd2[, phylum := NULL]
+dd2[, family := NULL]
+dd2[, type := NULL]

@@ -73,6 +73,7 @@ def main():
     print("Loading kegg_paths")
     module2name = {}
     module2def = {}
+    module2ko = {}
     for m in os.listdir(DB_FOLDER + "/ec2kegg/modules"):
         with open(DB_FOLDER + "/ec2kegg/modules/" + m) as handle:
             lines = handle.readlines()
@@ -95,11 +96,38 @@ def main():
 
     otu2mods = {(otu.name, k) : v for otu in tqdm(otu_list) for k,v in otu.get_kos(cog2annot, module2def).items()}
 
+    out_dir = "outputs/" + input_file.split("ani_")[-1][:-4]
+    os.makedirs(out_dir, exist_ok=True)
 
+    threashold = 0.3
+    otu2def = {}
+    for otu in tqdm(otu_list) :
+        cogs = otu.core
+        kos = [max(cog2annot[c]['KEGG_ko'].items(), key = lambda x: x[1]) for c in cogs if c in cog2annot and cog2annot[c]['KEGG_ko']]
+        core_kos = {k.replace("ko:","") for k,v in kos if v > threashold}
+
+        cogs = [c for c,v in otu.cogCounts.items() if c not in otu.core]
+        kos = [max(cog2annot[c]['KEGG_ko'].items(), key = lambda x: x[1]) for c in cogs if c in cog2annot and cog2annot[c]['KEGG_ko']]
+        pangenome_kos = {k.replace("ko:","")  for k,v in kos if v > threashold}
+        for k, v in module2def.items():
+            if otu2mods[(otu.name, "in_core")][k] > 0:
+                tt = v
+                for ko in core_kos:
+                    tt = tt.replace(ko, "**" + ko + "**")
+                otu2def[(otu.name, k, "in_core")] = tt
+            if otu2mods[(otu.name, "in_aux")][k] > 0:
+                tt = v
+                for ko in pangenome_kos:
+                    tt = tt.replace(ko, "**" + ko + "**")
+                otu2def[(otu.name, k, "in_aux")] = tt
+    otu2def = sorted(otu2def.items(), key = lambda x: (x[0][1], x[0][0], x[0][2]))
+
+    pandas.DataFrame.from_dict(otu2mods).transpose().to_csv(pjoin(out_dir, "mod_matrix.csv"))
+    with open(pjoin(out_dir, "mod_defs.txt"), "w") as handle:
+        handle.writelines([";".join(k) + ";" + v  + "\n" for k,v in otu2def])
 
     pandas.DataFrame.from_dict({otu.name + "_" + k : v  for otu in otu_list for k, v in otu.annot_partition(cog2annot=cog2annot, annotation = "GOs")['counts'].items() }).transpose().fillna(0).to_csv("COG_cats.csv")
 
-    out_dir = "outputs/" + input_file.split("ani_")[-1][:-4]
 
     os.makedirs(out_dir, exist_ok = True)
 
