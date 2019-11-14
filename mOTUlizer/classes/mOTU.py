@@ -10,6 +10,13 @@ import pandas
 from tqdm import tqdm
 from numpy import log10
 from scipy.stats import hypergeom
+import sys
+
+
+sys.path += ["/home/moritz/repos/moritz/0042_emapper2json"]
+
+from emapper2json import _COG_CATS_, get_blocks
+
 
 class mOTU:
     def __len__(self):
@@ -287,19 +294,6 @@ class mOTU:
         mods_inaux = {c : get_blocks( pangenome_kos, v) for c,v in tqdm(module2def.items())}
         mods_incore = {c : get_blocks( core_kos, v) for c,v in tqdm(module2def.items())}
         return {'in_core' : mods_incore, 'in_aux' : mods_inaux}
-
-    def get_kos(otu, cog2annot, threashold = 0.3):
-        cogs = otu.core
-        kos = [max(cog2annot[c]['KEGG_ko'].items(), key = lambda x: x[1]) for c in cogs if c in cog2annot and cog2annot[c]['KEGG_ko']]
-        core_kos = {k.replace("ko:","") for k,v in kos if v > threashold}
-
-        cogs = [c for c,v in otu.cogCounts.items() if c not in otu.core]
-        kos = [max(cog2annot[c]['KEGG_ko'].items(), key = lambda x: x[1]) for c in cogs if c in cog2annot and cog2annot[c]['KEGG_ko']]
-        pangenome_kos = {k.replace("ko:","")  for k,v in kos if v > threashold}
-        mods_inaux = {c : get_blocks( pangenome_kos, v) for c,v in tqdm(module2def.items())}
-        mods_incore = {c : get_blocks( core_kos, v) for c,v in tqdm(module2def.items())}
-        return {'in_core' : mods_incore, 'in_aux' : mods_inaux}
-
 
 
     def annot_partition(self, cog2annot, annotation = "COG_functional_cat"):
