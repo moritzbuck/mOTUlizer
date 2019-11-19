@@ -5,6 +5,8 @@ import shutil
 import sys
 from os.path import join as pjoin
 import argparse
+import json
+
 
 print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
 sys.path.append("/home/moritz/repos/moritz/0039_mOTUlizer/")
@@ -55,7 +57,13 @@ def main(args):
         sys.exit("at least one of --faas and --cog_file is required")
 
     motu = mOTU( name , faas , cog_dict, checkm_dict = checkm)
-    print(motu.get_stats())
+    if args.output:
+        out_handle = open(out_file, "w")
+    else :
+        out_file = sys.stdout
+    json.dump(motu.get_stats(), out_file)
+    if args.output:
+        out_handle.close()
 
     return None
 
