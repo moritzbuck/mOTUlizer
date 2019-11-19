@@ -27,8 +27,13 @@ Returns all to stdout by default.
 def main(args):
     if args.cog_file:
         try :
-            with open(args.cog_file) as handle:
-                cog_dict = {l.split("\t")[0] : l[:-1].split("\t")[1:] for l in handle}
+            if args.cog_file.endswith(".json"):
+                with open(args.cog_file) as handle:
+                    cog_dict = json.load(handle)
+            else :
+                with open(args.cog_file) as handle:
+                    cog_dict = {l.split("\t")[0] : l[:-1].split("\t")[1:] for l in handle}
+            cog_dict = {k : set(v) for k,v in cog_dict.items()}
         except :
             print("Either the cog_file does not exists or it is not formated well")
 
@@ -42,8 +47,8 @@ def main(args):
     assert all([os.path.exists(f) for f in faas.values()]), "one or some of your faas don't exists"
 
 
-    if cog_dict and len(faa) > 0:
-        if len(faas.union(cog_dict)) != len(faas) or len(faas) != len(cog_dict):
+    if cog_dict and len(faas) > 0:
+        if len(set(faas.keys()).union(set(cog_dict.keys()))) != len(faas) or len(faas) != len(cog_dict):
             print("your faas and cog_drct are not the same length,\nit might not matter just wanted to let you know.", file = sys.stderr)
 
     out_json = args.output

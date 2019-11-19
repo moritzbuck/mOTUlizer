@@ -25,7 +25,7 @@ class mOTU:
             self.aa2cog = tt['aa2cog']
         else :
             self.cog_dict = cog_dict
-            self.aa2cog = None
+            self.aa2cog = {}
 
         self.members = [MetaBin(bin_name, self.cog_dict[bin_name], self.faas.get(bin_name), checkm_dict.get(name) ) for bin_name in self.faas.keys()]
         self.core = None
@@ -97,7 +97,7 @@ class mOTU:
         "core" : list(self.core),
         "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core],
         "singleton_cogs" : [k for k,v in self.cogCounts.items() if k not in self.core if v == 1],
-        "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : {k : list(v) for k,v in self.aa2cog.items()}}
+        "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog}
         }
         return out
 
