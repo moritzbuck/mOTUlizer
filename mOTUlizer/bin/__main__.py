@@ -56,7 +56,7 @@ def main(args):
     if args.seed :
         for f in faas:
             checkm[f] = args.seed
-            
+
     name = args.name if args.name else random_name()
 
     if faas is None and cogs is None:
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     parser.add_argument('--output', '-o', nargs = '?', help = "send output to this file")
     parser.add_argument('--force', '-f', help = "force execution answering default answers")
     parser.add_argument('--checkm', '-k',nargs = '?', help = "checkm file if you want to see completnesses with it")
-    parser.add_argument('--seed', '-s', type = float , nargs = '?', help = "seed completeness")
+    parser.add_argument('--seed', '-s', type = float , nargs = '?', help = "seed completeness, advice a number around 90 (95 default)")
     parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot")
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
     parser.add_argument('--name', '-n', nargs = '?', help = "if you want to name this bag of bins")

@@ -23,8 +23,8 @@ def compute_COGs(faas, name = "silixCOGs", precluster = False):
 
     print("all v all diamond for silix", file = sys.stderr)
     os.system("cat " + " ".join([*faas.values()]) + " > " + temp_file)
-    os.system("diamond makedb --db {faas} --in {faas} > /dev/null".format(faas = temp_file))
-    os.system("diamond blastp --more-sensitive -p {threads} -f 6 -q {faas} --db {faas} -o {out} > /dev/null".format(faas = temp_file, out = temp_out, threads = THREADS))
+    os.system("diamond makedb --db {faas} --in {faas} > /dev/null 2> /dev/null".format(faas = temp_file))
+    os.system("diamond blastp --more-sensitive -p {threads} -f 6 -q {faas} --db {faas} -o {out} 2> /dev/null > /dev/null".format(faas = temp_file, out = temp_out, threads = THREADS))
 
     print("running silix", file = sys.stderr)
     os.system("silix {faas} {out} > {clust_temp} 2> /dev/null".format(faas = temp_file, out = temp_out, clust_temp = temp_clust))
