@@ -56,6 +56,7 @@ def main(args):
     if args.seed :
         for f in faas:
             checkm[f] = args.seed
+            
     name = args.name if args.name else random_name()
 
     if faas is None and cogs is None:

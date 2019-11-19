@@ -26,8 +26,7 @@ class mOTU:
         else :
             self.cog_dict = cog_dict
             self.aa2cog = {}
-
-        self.members = [MetaBin(bin_name, self.cog_dict[bin_name], self.faas.get(bin_name), checkm_dict.get(name) ) for bin_name in self.faas.keys()]
+        self.members = [MetaBin(bin_name, self.cog_dict[bin_name], self.faas.get(bin_name), checkm_dict.get(bin_name)) for bin_name in self.faas.keys()]
         self.core = None
         self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
         for mag in self.members:
