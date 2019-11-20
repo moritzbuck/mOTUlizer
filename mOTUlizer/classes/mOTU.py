@@ -26,6 +26,12 @@ class mOTU:
         else :
             self.cog_dict = cog_dict
             self.aa2cog = {}
+
+        if checkm_dict == "length_seed" :
+            max_len = max([len(cogs) for cogs in self.cog_dict.values()])
+            checkm_dict = {}
+            for f in self.faas:
+                checkm_dict[f] = 100*len(self.cog_dict[f])/max_len
         self.members = [MetaBin(bin_name, self.cog_dict[bin_name], self.faas.get(bin_name), checkm_dict.get(bin_name)) for bin_name in self.faas.keys()]
         self.core = None
         self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}

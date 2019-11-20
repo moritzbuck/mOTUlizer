@@ -53,9 +53,13 @@ def main(args):
 
     out_json = args.output
     checkm = args.checkm if args.checkm else {}
+
     if args.seed :
         for f in faas:
             checkm[f] = args.seed
+    if args.length_seed :
+        checkm = "length_seed"
+
 
     name = args.name if args.name else random_name()
 
@@ -76,9 +80,10 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "mOTUlizer", description=description_text, epilog = "Let's do this")
     parser.add_argument('--output', '-o', nargs = '?', help = "send output to this file")
-    parser.add_argument('--force', '-f', help = "force execution answering default answers")
+    parser.add_argument('--force', '-f', action='store_true', help = "force execution answering default answers")
     parser.add_argument('--checkm', '-k',nargs = '?', help = "checkm file if you want to see completnesses with it")
     parser.add_argument('--seed', '-s', type = float , nargs = '?', help = "seed completeness, advice a number around 90 (95 default)")
+    parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction")
     parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot")
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
     parser.add_argument('--name', '-n', nargs = '?', help = "if you want to name this bag of bins")
