@@ -7,8 +7,10 @@ from mOTUlizer.config import *
 from random import shuffle, choice
 from math import log10
 import sys
+import json
 
 mean = lambda x : sum(x)/len(x)
+
 class mOTU:
     def __len__(self):
         return len(self.members)
@@ -30,10 +32,11 @@ class mOTU:
         if checkm_dict == "length_seed" :
             max_len = max([len(cogs) for cogs in self.cog_dict.values()])
             checkm_dict = {}
-            for f in self.faas:
+            for f in self.cog_dict:
                 checkm_dict[f] = 100*len(self.cog_dict[f])/max_len
-        self.members = [MetaBin(bin_name, self.cog_dict[bin_name], self.faas.get(bin_name), checkm_dict.get(bin_name)) for bin_name in self.faas.keys()]
+        self.members = [MetaBin(bin_name, self.cog_dict[bin_name], self.faas.get(bin_name), checkm_dict.get(bin_name)) for bin_name in self.cog_dict.keys()]
         self.core = None
+
         self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
         for mag in self.members:
             for cog in mag.cogs:
@@ -111,27 +114,34 @@ class mOTU:
         self.core = set([c for c, v in likelies.items() if v > 0])
         core_len = len(self.core)
         i = 1
-        print("iteration 1 : ", core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
+#        print("iteration 1 : ", core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
         for mag in self:
-            mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
+            if len(self.core) > 0:
+                mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
+            else :
+                mag.new_completness = 0
             mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
-            mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.01
+            mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.1
         for i in range(2,max_it):
             likelies = {cog : self.__core_likely(cog, complet = "new", core_size = core_len) for cog in self.cogCounts}
             self.core = set([c for c, v in likelies.items() if v > 0])
             new_core_len = len(self.core)
             for mag in self:
-                mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
+                if len(self.core) > 0:
+                    mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
+                else :
+                    mag.new_completness = 0
                 mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
                 mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.01
 
-            print("iteration",i, ": ", new_core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
+#            print("iteration",i, ": ", new_core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
             if new_core_len == core_len:
                break
             else :
                 core_len =new_core_len
 
-        print("starting completeness", mean([b.checkm_complet for b in self]), ", mean new_completness",  mean([b.new_completness for b in self]), file = sys.stderr)
+        json.dump({ self.name : {"core_len" : core_len, "mean_starting_completeness" :  mean([b.checkm_complet for b in self]), " mean_new_completness" : mean([b.new_completness for b in self]), "LHR"  :  sum(likelies.values()), "mean_est_binsize" : mean([100*len(b.cogs)/b.new_completness for b in self])}}, sys.stderr )
+        print(file = sys.stderr)
         self.iterations = i -1
         return likelies
 

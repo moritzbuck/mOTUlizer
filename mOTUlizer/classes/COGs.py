@@ -15,11 +15,11 @@ def compute_COGs(faas, name = "silixCOGs", precluster = False):
     for k,v in faas.items():
         with open(v) as handle:
             ids = [l[:-1].split()[0] for l in handle if l[0] == ">"]
-            prot2faa.update({i[1:] : k for i in ids})
-            set_ids = set(ids)
-            assert len(ids) == len(set_ids), "the faa {name} has duplicated ids".format(name = k)
-            assert len(prot_ids.intersection(set_ids)) == 0, "the faa {name} has duplicated ids with someone else, the id(s) are {bla}[...]".format(name = k, bla = list(prot_ids.intersection(set_ids))[0:10])
-            prot_ids.update(set_ids)
+            for i in ids:
+                if i in prot2faa:
+                    prot2faa[i] += [ids]
+                else :
+                    prot2faa[i] = [ids]
 
     print("all v all diamond for silix", file = sys.stderr)
     os.system("cat " + " ".join([*faas.values()]) + " > " + temp_file)
@@ -38,5 +38,6 @@ def compute_COGs(faas, name = "silixCOGs", precluster = False):
     recs = {k : name + "_" + v.zfill(fill) for k, v in recs.items()}
     genome2cog = {k : set() for k in faas.keys()}
     for k,v in recs.items():
-        genome2cog[prot2faa[k]].update([v])
+        for vv in prot2faa[k]:
+        genome2cog[vv].update([v])
     return { 'genome2cogs' : genome2cog, 'aa2cog' : recs}

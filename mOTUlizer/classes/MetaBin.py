@@ -9,7 +9,7 @@ class MetaBin:
         self.name = name
         self.cogs = cogs
         self.faas = faas
-        self.checkm_complet = checkm_complet if checkm_complet else 95
+        self.checkm_complet = checkm_complet if checkm_complet else 80
         self.checkm_complet = self.checkm_complet if self.checkm_complet < 95 else 95
         self.new_completness = None
 
