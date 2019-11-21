@@ -39,5 +39,5 @@ def compute_COGs(faas, name = "silixCOGs", precluster = False):
     genome2cog = {k : set() for k in faas.keys()}
     for k,v in recs.items():
         for vv in prot2faa[k]:
-        genome2cog[vv].update([v])
+            genome2cog[vv].update([v])
     return { 'genome2cogs' : genome2cog, 'aa2cog' : recs}
