@@ -14,7 +14,7 @@ def compute_COGs(faas, name = "silixCOGs", precluster = False):
     prot2faa ={}
     for k,v in faas.items():
         with open(v) as handle:
-            ids = [l[:-1].split()[0] for l in handle if l[0] == ">"]
+            ids = [l[:-1].split()[0][1:] for l in handle if l[0] == ">"]
             for i in ids:
                 if i in prot2faa:
                     prot2faa[i] += [ids]
