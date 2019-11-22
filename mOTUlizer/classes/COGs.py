@@ -17,9 +17,9 @@ def compute_COGs(faas, name = "silixCOGs", precluster = False):
             ids = [l[:-1].split()[0][1:] for l in handle if l[0] == ">"]
             for i in ids:
                 if i in prot2faa:
-                    prot2faa[i] += [ids]
+                    prot2faa[i] += [k]
                 else :
-                    prot2faa[i] = [ids]
+                    prot2faa[i] = [k]
 
     print("all v all diamond for silix", file = sys.stderr)
     os.system("cat " + " ".join([*faas.values()]) + " > " + temp_file)
