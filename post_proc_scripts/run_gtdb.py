@@ -5,6 +5,8 @@ from os.path import join as pjoin
 import sys
 import random
 import json
+from numpy import mean
+
 
 sys.path.append("/home/moritz/repos/moritz/0039_mOTUlizer/")
 from mOTUlizer.classes.mOTU import mOTU
@@ -51,7 +53,7 @@ for k, v in tqdm(mOTU2aa.items()):
 cool_dat =  pandas.DataFrame.from_dict(
     { k :
         {
-        "mean_cogs" : mean([len(l) for l in  v['cogs']['genome'].values()]),
+        "mean_cogs" : mean([100*len(l)/v['completes'][kk] for kk,l in  v['cogs']['genome'].items()]),
         "core_len" : len(v['core']),
         "aux_len" : len(v['aux_genome']),
         "aux_sinsingle" : len(set(v['aux_genome']).difference(v['singleton_cogs'])),
