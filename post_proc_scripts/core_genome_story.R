@@ -3,7 +3,7 @@ library(ggplot2)
 library(hues)
 library(vegan)
 
-runs = list.dirs(path = "outputs/", full.names=FALSE)
+runs = list.dirs(path = "scratch/outputs/", full.names=FALSE)
 runs = runs[2:length(runs)]
 
 whole_data = lapply(runs, function(r)
@@ -47,6 +47,17 @@ ggplot(whole_data$otus_95_70$rarefy[otu_per_genus > 5] , aes(x=rr_genome_count, 
 ggplot(whole_data$otus_95_70$data, aes(x=mean_cog_count, y=nosingle_pan/log(nb_genomes), col = phylum, size=nb_genomes)) + geom_point()+scale_color_manual(values=as.vector(iwanthue(length(unique(whole_data$otus_95_70$data$phylum)))))+scale_y_log10()+scale_x_log10()
 ggplot(whole_data$otus_95_70$counts[otu_per_family > 3], aes(x=fract, y=cog_count, col = taxonomy, by=otu)) + geom_point()+geom_line()+facet_wrap(~phylum+family, ncol=4)+ theme(legend.position = "none")+scale_y_log10()
 
+gtdb_dat = fread("~/uppmax/people/0023_anoxicencyclo/4500_assembly_analysis/cool_dat.csv")
+annox_dat = whole_data$otus_95_70$data
+keeps = c("otu", "mean_cog_count", "core_size" , "full_pan", "nosingle_pan", "nb_genomes", "phylum", "phylum", "class" , "order", "family", "genus", "genus")
+annox_dat = annox_dat[, ..keeps]
+colnames(annox_dat) = colnames(gtdb_dat)
+annox_dat$set = "freshwater"
+gtdb_dat$set = "gtdb"
+
+set_pal = c(freshwater = "#006666", gtdb = "#990099")
+ggplot(rbind(annox_dat, gtdb_dat), aes(x=mean_cogs, fill=set))+geom_histogram(bins=50)+facet_wrap(~set, ncol=1)+theme_minimal()+xlab("mean number of COGs per mOTU")+scale_fill_manual(values = set_pal)
+ggsave("mOTUlizer/doc/figs/Supplemental_fig_1_COG_count_hist.pdf")
 
 COG_CATS = unlist(list(
 "A" = "RNA processing and modification",
