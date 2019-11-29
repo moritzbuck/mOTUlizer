@@ -161,8 +161,8 @@ class mOTU:
 #        presence = [ log10(1 -   ( 1 - 1/len(self.cogCounts))**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog in mag.cogs]
 #        abscence = [       log10(( 1 - 1/len(self.cogCounts))**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog not in mag.cogs]
 
-        presence = [ log10(1 -   ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag)))) if len(mag.cogs) != (core_size*comp(mag)) else MIN_PROB for mag in self if cog in mag.cogs]
-        abscence = [       log10(( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag)))) if len(mag.cogs) != (core_size*comp(mag)) else log10(1-(10**MIN_PROB)) for mag in self if cog not in mag.cogs]
+        presence = [ log10(1 -   ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag)))) if len(mag.cogs) > (core_size*comp(mag)) else MIN_PROB for mag in self if cog in mag.cogs]
+        abscence = [       log10(( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag)))) if len(mag.cogs) > (core_size*comp(mag)) else log10(1-(10**MIN_PROB)) for mag in self if cog not in mag.cogs]
 
 
         #abscence = [ 1-self.cogCounts[cog]/len(self)*comp(mag) for mag in self if cog not in mag.cogs]
