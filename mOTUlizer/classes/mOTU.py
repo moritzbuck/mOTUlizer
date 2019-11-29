@@ -105,7 +105,8 @@ class mOTU:
         "core" : list(self.core),
         "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core],
         "singleton_cogs" : [k for k,v in self.cogCounts.items() if k not in self.core if v == 1],
-        "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog}
+        "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog},
+        "completes" : {v.name : v.new_completness  for v in self}
         }
         return out
 

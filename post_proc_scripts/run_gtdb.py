@@ -29,7 +29,10 @@ def make_file(genome_id) :
         path = pjoin(local_gtdb_path, "{first}/{second}/{third}/{gtdb_id}/proteom.faa".format(first = genome_id.split('_')[-1][0:3],second = genome_id.split('_')[-1][3:6], third = genome_id.split('_')[-1][6:9], gtdb_id = genome_id))
     return path
 
-mOTU2aa = {k : {g : make_file(g) for g in v} for k,v in mOTU2genome.items() if len(v) > 5}
+with open("gtdb_cores.json") as handle:
+    out_dat = json.load(handle)
+
+mOTU2aa = {k : {g : make_file(g) for g in v} for k,v in mOTU2genome.items() if len(v) > 5 and k not in out_dat}
 mOTU2aa = {k : {g : p for g, p in v.items() if os.path.exists(p)} for k,v in tqdm(list(mOTU2aa.items()))}
 mOTU2aa = {k : v for k,v in tqdm(mOTU2aa.items()) if len(v) > 5 }
 for k,v in tqdm(mOTU2aa.items()):
@@ -37,9 +40,7 @@ for k,v in tqdm(mOTU2aa.items()):
          selected = random.sample(list(v.items()),50)
          mOTU2aa[k] = dict(selected)
 
-out_dat = {}
-with open("gtdb_cores.json") as handle:
-    out_dat = json.load(handle)
+#out_dat = {}
 
 for k, v in tqdm(mOTU2aa.items()):
     if k not in out_dat:
