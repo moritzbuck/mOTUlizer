@@ -41,9 +41,9 @@ We used this new developed statistical method for the computation of core genome
 
 For these selected ~1500 mOTUs we have computed core genomes using cluster of orthologous genes (COGs) as sequence based traits. To account for possible errors both in gene-prediction and metagenomic binning, all COGs appearing only once have been removed. So a core-COG will be a COG that is expected to be present in every genome of that mOTU, and an auxiliary-COG is a COG that is present in a fraction of the genomes of that mOTU, but at least two different genomes.
 
-The core-genomes
+The genomes obtained correspond to a large variety of genome sizes (Sup. fig. [sup_1](#sup_1) )
 
 # Supplementals
 
-![](figs/Supplemental_fig_1_COG_count_hist.pdf)
-*Supplemental Figure 1: Average nbumber of COGs per genomes in mOTUs*
+![sup_1](figs/Supplemental_fig_1_COG_count_hist.pdf)
+*Supplemental Figure 1: Average number of COGs per genomes in mOTUs*
