@@ -17,7 +17,6 @@ local_gtdb_path = "/home/moritz/proj_folder/uppstore2018126/moritz/gtdb_genomes/
 local_anoxic_path = "/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/mags/mOTUs/"
 anoxic_md_file = "/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/magstats.csv"
 
-
 anoxi_mOTUs = {motu : {a[:-4] : pjoin(local_anoxic_path, motu, a) for a in os.listdir(pjoin(local_anoxic_path, motu))} for motu in os.listdir(local_anoxic_path)}
 anoxic_md = pandas.read_csv(anoxic_md_file)
 anoxi_mOTUs = {k : v for k,v in tqdm(anoxi_mOTUs.items()) if len(v) > 5 }
@@ -30,7 +29,7 @@ for k,v in tqdm(anoxi_mOTUs.items()):
 md = pandas.concat([pandas.read_csv(gtdb_bac_md_file, sep="\t"),pandas.read_csv(gtdb_ar_md_file, sep="\t")])
 dd = { v[1]['accession'] : v[1]['gtdb_genome_representative']  for v in md.iterrows()}
 mOTU2genome =  {d : []  for d in set(dd.values())}
-checkm = { v[1]['accessio'] : v[1]['checkm_completeness']  for v in md.iterrows()}
+checkm = { v[1]['accession'] : v[1]['checkm_completeness']  for v in md.iterrows()}
 checkm.update({ v[1]['Unnamed: 0'] : v[1]['completeness']  for v in anoxic_md.iterrows()})
 md.index = md.accession
 
