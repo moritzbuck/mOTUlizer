@@ -17,22 +17,31 @@ local_gtdb_path = "/home/moritz/proj_folder/uppstore2018126/moritz/gtdb_genomes/
 local_anoxic_path = "/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/mags/mOTUs/"
 anoxic_md_file = "/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/magstats.csv"
 
+md = pandas.concat([pandas.read_csv(gtdb_bac_md_file, sep="\t"),pandas.read_csv(gtdb_ar_md_file, sep="\t")])
+dd = { v[1]['accession'] : v[1]['gtdb_genome_representative']  for v in md.iterrows()}
+mOTU2genome =  {d : []  for d in set(dd.values())}
+checkm = { v[1]['accession'] : v[1]['checkm_completeness']  for v in md.iterrows()}
+md.index = md.accession
 
 anoxi_mOTUs = {motu : {a[:-4] : pjoin(local_anoxic_path, motu, a) for a in os.listdir(pjoin(local_anoxic_path, motu))} for motu in os.listdir(local_anoxic_path)}
 anoxic_md = pandas.read_csv(anoxic_md_file)
-anoxi_mOTUs = {k : v for k,v in tqdm(anoxi_mOTUs.items()) if len(v) > 5 }
+anoxic_md.index = anoxic_md['Unnamed: 0']
+
+checkm.update({ v[1]['Unnamed: 0'] : v[1]['completeness']  for v in anoxic_md.iterrows()})
+anoxi_mOTUs = { k : {kk : vv for kk, vv in v.items() if anoxic_md.loc[kk,"contamination"] < 5 and anoxic_md.loc[kk,"completeness"] > 40} for k,v in anoxi_mOTUs.items() }
+anoxi_mOTUs = {k : v for k,v in tqdm(anoxi_mOTUs.items()) if sum([ checkm[k] for k in v]) > 500}
+
+with open("full_taxonomy.tax") as handle:
+    taxonomy = {l.split(",")[0] : l[:-1].split(",")[1:] for l in handle}
+taxonomy_local = { k : set([tuple(taxonomy[vv]) for vv in v if vv in taxonomy]) for k,v in anoxi_mOTUs.items()}
+taxonomy_local.update({k : {vv for vv in v if vv.count('') == min([zz.count('') for zz in v])} for k, v in taxonomy_local.items() if len(v) > 1})
+taxonomy_local.update({k : { max(v, key = lambda y : [tuple(taxonomy[zz]) for zz in anoxi_mOTUs[k]].count(y))} for k, v in taxonomy_local.items() if len(v) > 1})
+taxonomy_local = {k : list(v)[0] for k,v in taxonomy_local.items()}
+
 for k,v in tqdm(anoxi_mOTUs.items()):
      if len(v) > 50:
          selected = random.sample(list(v.items()),50)
          anoxi_mOTUs[k] = dict(selected)
-
-
-md = pandas.concat([pandas.read_csv(gtdb_bac_md_file, sep="\t"),pandas.read_csv(gtdb_ar_md_file, sep="\t")])
-dd = { v[1]['accession'] : v[1]['gtdb_genome_representative']  for v in md.iterrows()}
-mOTU2genome =  {d : []  for d in set(dd.values())}
-checkm = { v[1]['accessio'] : v[1]['checkm_completeness']  for v in md.iterrows()}
-checkm.update({ v[1]['Unnamed: 0'] : v[1]['completeness']  for v in anoxic_md.iterrows()})
-md.index = md.accession
 
 for k,v in tqdm(dd.items()):
     mOTU2genome[v] += [k]
@@ -56,22 +65,33 @@ for k,v in tqdm(mOTU2aa.items()):
          selected = random.sample(list(v.items()),50)
          mOTU2aa[k] = dict(selected)
 
+anoxi_mOTUs = {k : v for k,v in anoxi_mOTUs.items() if k not in out_dat}
+
 
 #out_dat = {}
-for k, v in tqdm(mOTU2aa.items()):
+for k, t in tqdm(enumerate(mOTU2aa.items())):
+    k, v = t
     if k not in out_dat:
         motu = mOTU( k , v , None, checkm_dict = {vv : checkm [vv] for vv in v.keys()})
         out_dat.update(motu.get_stats())
-        with open("gtdb_cores.json", "w") as handle :
-            json.dump(out_dat, handle)
+        if i % 10 == 0:
+            print("check pointing")
+            with open("gtdb_cores.json", "w") as handle :
+                json.dump(out_dat, handle)
+with open("gtdb_cores.json", "w") as handle :
+    json.dump(out_dat, handle)
 
-for k, v in tqdm(anoxi_mOTUs.items()):
+for i, t in tqdm(enumerate(anoxi_mOTUs.items())):
+    k, v = t
     if k not in out_dat:
         motu = mOTU( k , v , None, checkm_dict = {vv : checkm [vv] for vv in v.keys()})
         out_dat.update(motu.get_stats())
-        with open("gtdb_cores.json", "w") as handle :
-            json.dump(out_dat, handle)
-
+        if i % 10 == 0:
+            print("check pointing")
+            with open("gtdb_cores.json", "w") as handle :
+                json.dump(out_dat, handle)
+with open("gtdb_cores.json", "w") as handle :
+    json.dump(out_dat, handle)
 
 
 cool_dat =  pandas.DataFrame.from_dict(
@@ -88,7 +108,10 @@ cool_dat =  pandas.DataFrame.from_dict(
         for k,v in out_dat.items()
     }, orient="index")
 
-taxo = pandas.DataFrame.from_dict({k : {l : vv[3:] for l,vv in zip(["domain", "phylum", "class", "order", "family", "genus", "species"] , v.split(";"))}  for k,v in md.loc[cool_dat.index]['gtdb_taxonomy'].iteritems()}, orient="index")
+
+gtdb_tax = {k : {l : vv[3:] for l,vv in zip(["domain", "phylum", "class", "order", "family", "genus", "species"] , v.split(";"))}  for k,v in md.loc[cool_dat.index]['gtdb_taxonomy'].iteritems() if not k.startswith("aniOTU_")}
+gtdb_tax.update({k : {a : b for a,b in zip(["domain", "phylum", "class", "order", "family", "genus", "species"], v)} for k,v in taxonomy_local.items()})
+taxo = pandas.DataFrame.from_dict(gtdb_tax, orient="index")
 
 cool_dat = pandas.concat([cool_dat, taxo], axis = 1)
 cool_dat.to_csv("cool_dat.csv")

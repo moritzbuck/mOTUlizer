@@ -141,7 +141,7 @@ class mOTU:
             else :
                 core_len =new_core_len
 
-        json.dump({ self.name : {"nb_mags" : len(self), "core_len" : core_len, "mean_starting_completeness" :  mean([b.checkm_complet for b in self]), "mean_new_completness" : mean([b.new_completness for b in self]), "LHR"  :  sum(likelies.values()), "mean_est_binsize" : mean([100*len(b.cogs)/b.new_completness for b in self])}}, sys.stderr )
+        json.dump({ self.name : {"nb_mags" : len(self), "core_len" : core_len, "mean_starting_completeness" :  mean([b.checkm_complet for b in self]), "mean_new_completness" : mean([b.new_completness for b in self]), "LHR"  :  sum([l if l > 0 else -l for l in likelies.values()]), "mean_est_binsize" : mean([100*len(b.cogs)/b.new_completness for b in self])}}, sys.stderr )
         print(file = sys.stderr)
         self.iterations = i -1
         return likelies
@@ -160,10 +160,10 @@ class mOTU:
 
 #        presence = [ log10(1 -   ( 1 - 1/len(self.cogCounts))**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog in mag.cogs]
 #        abscence = [       log10(( 1 - 1/len(self.cogCounts))**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog not in mag.cogs]
+        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag)) for mag in self}
 
-        presence = [ log10(1 -   ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag)))) if len(mag.cogs) > (core_size*comp(mag)) else MIN_PROB for mag in self if cog in mag.cogs]
-        abscence = [       log10(( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag)))) if len(mag.cogs) > (core_size*comp(mag)) else log10(1-(10**MIN_PROB)) for mag in self if cog not in mag.cogs]
-
+        presence = [ log10(1 -   mag_prob[mag]) if mag_prob[mag] < 1 else MIN_PROB                for mag in self if cog in mag.cogs]
+        abscence = [ log10(      mag_prob[mag]) if mag_prob[mag] > 0 else log10(1-(10**MIN_PROB)) for mag in self if cog not in mag.cogs]
 
         #abscence = [ 1-self.cogCounts[cog]/len(self)*comp(mag) for mag in self if cog not in mag.cogs]
         #presence = [ self.cogCounts[cog]/len(self)*comp(mag) for mag in self if cog not in mag.cogs]
