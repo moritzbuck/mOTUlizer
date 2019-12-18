@@ -1,3 +1,11 @@
+---
+title: "Bacterial pangenomes"
+author: Moritz Buck
+date: December, 2019
+geometry: margin=2cm
+output: pdf_document
+---
+
 # Bacterial pangenomes are constrained by genome size
 
 Understanding the population structure of wild microbial populations has been hard, most studies have been done on isolates, and more specifically isolates of a medical nature. The population of these will significantly differ from wild aquatic populations, where microbes have to survive in much poorer environment and are subjected to less bottlenecking events.
@@ -41,9 +49,23 @@ We used this new developed statistical method for the computation of core genome
 
 For these selected ~1500 mOTUs we have computed core genomes using cluster of orthologous genes (COGs) as sequence based traits. To account for possible errors both in gene-prediction and metagenomic binning, all COGs appearing only once have been removed. So a core-COG will be a COG that is expected to be present in every genome of that mOTU, and an auxiliary-COG is a COG that is present in a fraction of the genomes of that mOTU, but at least two different genomes.
 
-The genomes obtained correspond to a large variety of genome sizes (Sup. fig. [sup_1](#sup_1) )
+The core genomes obtained correspond to a large variety of genome sizes ([Fig. 1](#sup_1a)). It is noticeable that the GTDB dataset has two strong peaks corresponding to the classes Bacilli (phylum Firmicutes) and Gammaproteobacteria (phylum Proteobacteria), which are heavily represented in the database. In general, core genomes of the genomes in the database is larger then in our environmental dataset (GTDB : mean 2844.31, sd 1307.647; Anoxic MAGs : mean 2357.898, sd 990.5579), which exhibits a general bias in of public databases to larger genomes (typically soil and disease associated microbes).
 
-# Supplementals
+The converse fraction of the core genome, the variable fraction, which we define in our analysis as the COGs of a genome that are not part of the core, but are found in at least one other genome of this mOTU (singeltons are removed to remove spurious noise that could have been introduced by errors in binning of MAGs or gene-prediction, in general however results hold if they are kept). The gene-pool associated with all the variable fractions of the genomes of an mOTU, we will call auxiliary genome of an mOTU, as opposed to the pangenome which is the set of all the genes (COGs) that appear in a species.
 
-![sup_1](figs/Supplemental_fig_1_COG_count_hist.pdf)
-*Supplemental Figure 1: Average number of COGs per genomes in mOTUs*
+The size of the variable genome of an mOTU correlates with the size of the core-genome (Fig 2a), larger genomes have more auxiliary COGs. However the actual fraction of the genome that is variable does not change relative to the genome size. Indicating an implicit limitation in the fraction of the genome that can be variable, e.g no matter how many genes you have in your genome only X out of Y genes can be from the auxiliary genome, more specifically about one in 15 COGs.
+
+
+![fig_1](figs/Supplemental_fig_1_tree.pdf)
+*Figure 1: Tree of representative genomes of mOTUS, (corner panel) distribution of core genome sizes (number of COGs) *
+
+![fig_2](figs/Fig2_full.pdf)
+*Figure 2: Variable genome structure and diversity, a-b) variable-genome correlates with genome size as fraction of variable genome is the same for all genome sizes, c)
+
+
+## Supplemental figures
+
+
+## Supplemental data
+
+Core genomes

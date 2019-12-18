@@ -1,3 +1,4 @@
+import shutil
 import os
 import pandas
 from tqdm import tqdm
@@ -69,7 +70,7 @@ anoxi_mOTUs = {k : v for k,v in anoxi_mOTUs.items() if k not in out_dat}
 
 
 #out_dat = {}
-for k, t in tqdm(enumerate(mOTU2aa.items())):
+for i, t in tqdm(enumerate(mOTU2aa.items())):
     k, v = t
     if k not in out_dat:
         motu = mOTU( k , v , None, checkm_dict = {vv : checkm [vv] for vv in v.keys()})
@@ -94,16 +95,20 @@ with open("gtdb_cores.json", "w") as handle :
     json.dump(out_dat, handle)
 
 
+genome2comps = lambda k, v: {genome : (len(set(v['core']).intersection(cogs))/len(v['core']), len(set(v['core']).difference(cogs))/len(v['core'])) for genome, cogs in v['cogs']['genome'].items() }
+
 cool_dat =  pandas.DataFrame.from_dict(
     { k :
         {
         "mean_cogs" : mean([100*len(l)/v['completes'][kk] for kk,l in  v['cogs']['genome'].items()]),
         "core_len" : len(v['core']),
         "aux_len" : len(v['aux_genome']),
-        "mean_single" : mean([len(set(l).intersection(v['singleton_cogs'])) for kk,l in  v['cogs']['genome'].items()]),
         "aux_sinsingle" : len(set(v['aux_genome']).difference(v['singleton_cogs'])),
+        "mean_single" : mean([len(set(l).intersection(v['singleton_cogs'])) for kk,l in  v['cogs']['genome'].items()]),
+        "mean_variable" : mean([100*(len(l)-len(set(l).intersection(v['core']))-len(set(l).intersection(v['singleton_cogs'])))/v['completes'][kk] for kk,l in  v['cogs']['genome'].items()]),
         "nb_genomes" : len(v['cogs']['genome']),
-        "set" : "gtdb" if (k.startswith("UBA") or k.startswith("RS_") or k.startswith("GB_")) else "anoxi"
+        "set" : "gtdb" if (k.startswith("UBA") or k.startswith("RS_") or k.startswith("GB_")) else "anoxi",
+        "rep" : min(sorted(genome2comps(k,v).items(), key = lambda x : x[1][1])[0:5], key = lambda y : y[1][1])[0]
         }
         for k,v in out_dat.items()
     }, orient="index")
@@ -115,3 +120,12 @@ taxo = pandas.DataFrame.from_dict(gtdb_tax, orient="index")
 
 cool_dat = pandas.concat([cool_dat, taxo], axis = 1)
 cool_dat.to_csv("cool_dat.csv")
+
+[shutil.copy(make_file(k), "motulizer_reps/" + k + ".faa") for k in tqdm(cool_dat.loc[cool_dat.set != "anoxi", "rep"])]
+[shutil.copy("proteomics/proteoms/" + k + ".faa", "motulizer_reps/") for k in tqdm(cool_dat.loc[cool_dat.set == "anoxi", "rep"])]
+
+for f in tqdm(os.listdir("motulizer_reps/")):
+    seqs = [ s for s in SeqIO.parse(pjoin("motulizer_reps/", f), "fasta")]
+    for i,s in enumerate(seqs):
+        s.id = f + "_" + str(i)
+    SeqIO.write(seqs, pjoin("motulizer_reps/", f), "fasta")
