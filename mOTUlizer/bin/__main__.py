@@ -81,13 +81,13 @@ def main(args):
     motu = mOTU( name , faas , cog_dict, checkm_dict = checkm)
 
     if args.output:
-        out_handle = open(out_file, "w")
+        out_handle = open(out_json, "w")
     else :
         out_file = sys.stdout
     if not args.genome2cog_only:
-        json.dump(motu.get_stats(), out_file)
+        json.dump(motu.get_stats(), out_handle)
     else :
-        json.dump({k : list(v) for k,v in motu.cog_dict.items()}, out_file)
+        json.dump({k : list(v) for k,v in motu.cog_dict.items()}, out_handle)
     if args.output:
         out_handle.close()
 
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     parser.add_argument('--force', '-f', action='store_true', help = "force execution answering default answers")
     parser.add_argument('--checkm', '-k',nargs = '?', help = "checkm file if you want to see completnesses with it")
     parser.add_argument('--seed', '-s', type = float , nargs = '?', help = "seed completeness, advice a number around 90 (95 default)")
-    parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction")
+    parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction [0-100]")
     parser.add_argument('--random_seed', '--rs', action='store_true', help = "random seed completeness between 5 and 95%")
     parser.add_argument('--genome2cog_only', action='store_true', help = "returns genome2cog only")
     parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot")
@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-#    print(args, file=sys.stderr)
+    print(args, file=sys.stderr)
 
     main(args)
 
