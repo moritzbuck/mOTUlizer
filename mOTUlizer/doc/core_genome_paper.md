@@ -60,7 +60,7 @@ The size of the variable genome of an mOTU correlates with the size of the core-
 *Figure 1: Tree of representative genomes of mOTUS, (corner panel) distribution of core genome sizes (number of COGs) *
 
 ![fig_2](figs/Fig2_full.pdf)
-*Figure 2: Variable genome structure and diversity, a-b) variable-genome correlates with genome size as fraction of variable genome is the same for all genome sizes, c)
+*Figure 2: Variable genome structure and diversity, a-b) variable-genome correlates with genome size as fraction of variable genome is the same for all genome sizes, c)*
 
 
 ## Supplemental figures
