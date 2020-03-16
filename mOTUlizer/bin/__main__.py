@@ -10,7 +10,7 @@ from random import uniform
 
 
 #print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
-sys.path.append("/home/moritz/repos/moritz/0039_mOTUlizer/")
+sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
 
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
