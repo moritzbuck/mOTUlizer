@@ -25,6 +25,7 @@ From a buch of amino-acid sequences or COG-sets, computes concensus AA/COG sets.
 Returns all to stdout by default.
 """
 
+
 def main(args):
     if args.cog_file:
         try :
@@ -94,13 +95,13 @@ def main(args):
     return None
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog = "mOTUlizer", description=description_text, epilog = "Let's do this")
+    parser = argparse.ArgumentParser()#prog = "mOTUlizer", description=description_text, epilog = "Let's do this")
     parser.add_argument('--output', '-o', nargs = '?', help = "send output to this file")
     parser.add_argument('--force', '-f', action='store_true', help = "force execution answering default answers")
     parser.add_argument('--checkm', '-k',nargs = '?', help = "checkm file if you want to see completnesses with it")
     parser.add_argument('--seed', '-s', type = float , nargs = '?', help = "seed completeness, advice a number around 90 (95 default)")
     parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction [0-100]")
-    parser.add_argument('--random_seed', '--rs', action='store_true', help = "random seed completeness between 5 and 95%")
+    parser.add_argument('--random_seed', '--rs', action='store_true', help = "random seed completeness between 5 and 95 percent")
     parser.add_argument('--genome2cog_only', action='store_true', help = "returns genome2cog only")
     parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot")
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")

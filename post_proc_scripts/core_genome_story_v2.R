@@ -49,6 +49,8 @@ gtdb_dat = fread("~/uppmax/people/0023_anoxicencyclo/4500_assembly_analysis/cool
 gtdb_dat = gtdb_dat[!is.na(mean_cogs)]
 gtdb_dat = gtdb_dat[mean_cogs < 8000]
 gtdb_dat[set == "anoxi", set := "freshwater MAGs"]
+colnames(gtdb_dat)[9] = "db"
+
 gtdb_dat = gtdb_dat[sample(nrow(gtdb_dat))]
 
 count_phylum = table(factor(gtdb_dat$phylum))
@@ -104,10 +106,10 @@ write.table(phylum2col, "phylum2col.csv", quote = FALSE, col.names = FALSE, sep=
 anon_dat = copy(gtdb_dat)
 anon_dat[,class := NULL]
 anon_dat[,phylum := NULL]
-anon_dat[,set := NULL]
+anon_dat[,db := NULL]
 
 ggplot(gtdb_dat[phylum %in% selected_phylum], aes(x=core_len, col=paste(phylum,class , sep= ";")))+
-  facet_wrap(~set)+
+  facet_wrap(~db)+
   guides(col=guide_legend(ncol=2))+
   geom_histogram(data = anon_dat, alpha = 0.4, fill = "grey", col=NA)+theme_minimal()+
   geom_freqpoly(size=3)+
@@ -122,7 +124,7 @@ anon_dat[,phylum := NULL]
 fig2_h = 15
 fig2_w = 3
 
-ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes(x=mean_cogs, y=mean_variable, shape = set, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
+ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes(x=mean_cogs, y=mean_variable, shape = db, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
   geom_point(data = anon_dat, alpha = 0.4, col = '#dcdcdc')+
   geom_point()+
 #  geom_smooth(data = anon_dat, method = "lm", size = 1, alpha = 0.8, se=F)+
@@ -137,7 +139,7 @@ ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes(x=mean_cogs, y=mean_variable, sh
 
 ggsave("mOTUlizer/doc/figs/Fig_1a_var_vs_genome_size.pdf", width = fig2_w, height = fig2_h)
 
-ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes(shape = set, x=mean_cogs, y=mean_variable/mean_cogs, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
+ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes(shape = db, x=mean_cogs, y=mean_variable/mean_cogs, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
   geom_point(data = anon_dat, alpha = 0.2, col = '#dcdcdc')+
   geom_point( alpha = 0.7)+
 #  geom_smooth(data = anon_dat, method = "lm", size = 1, alpha = 0.8, se=F)+
@@ -152,7 +154,7 @@ ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes(shape = set, x=mean_cogs, y=mean
 
 ggsave("mOTUlizer/doc/figs/Fig_1b_variable_fract_vs_genome_size.pdf", width = fig2_w, height = fig2_h)
 
-ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes( x=mean_cogs, y=aux_sinsingle/mean_variable/sqrt(nb_genomes), shape = set, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
+ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes( x=mean_cogs, y=aux_sinsingle/mean_variable/sqrt(nb_genomes), shape = db, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
   geom_point(data = anon_dat, alpha = 0.4, col = "#dcdcdc")+
   geom_point( alpha = 0.7)+
 #  geom_smooth(data = anon_dat, method = "lm", size = 1, alpha = 0.8, se=F)+
@@ -167,7 +169,7 @@ ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes( x=mean_cogs, y=aux_sinsingle/me
 
 ggsave("mOTUlizer/doc/figs/Fig_1c_pangediv_vs_genome_size.pdf", width = fig2_w, height = fig2_h)
 
-ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes( x=mean_cogs, y=aux_sinsingle, shape = set, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
+ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes( x=mean_cogs, y=aux_sinsingle, shape = db, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
   geom_point(data = anon_dat, alpha = 0.4, col = "#dcdcdc")+
   geom_point( alpha = 0.7)+
 #  geom_smooth(data = anon_dat, method = "lm", size = 1, alpha = 0.8, se=F)+
@@ -182,7 +184,7 @@ ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes( x=mean_cogs, y=aux_sinsingle, s
 
 ggsave("mOTUlizer/doc/figs/Fig_1d_pangesize_vs_genome_size.pdf", width = fig2_w, height = fig2_h)
 
-p1 = ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes( x=mean_cogs, y=aux_sinsingle, shape = set, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
+p1 = ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes( x=mean_cogs, y=aux_sinsingle, shape = db, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
     geom_point( alpha = 0.7)+
     theme_minimal()+
     guides(shape = guide_legend(override.aes = list(size = 5)), col = guide_legend(override.aes = list(size = 5), ncol=1))+
@@ -199,7 +201,7 @@ ggplot(gtdb_dat[class %in% valids_classes], aes(x=mean_variable*log(nb_genomes),
   scale_y_log10()+scale_x_log10()+
   theme_minimal()
 
-ggplot(gtdb_dat[phylum %in% selected_phylum], aes(shape = set, x=mean_cogs, y=mean_variable/mean_cogs, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
+ggplot(gtdb_dat[phylum %in% selected_phylum], aes(shape = db, x=mean_cogs, y=mean_variable/mean_cogs, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
   geom_point(data = anon_dat, alpha = 0.2, col = '#dcdcdc')+
   geom_point( alpha = 0.7)+
 #  geom_smooth(data = anon_dat, method = "lm", size = 1, alpha = 0.8, se=F)+
@@ -212,7 +214,37 @@ ggplot(gtdb_dat[phylum %in% selected_phylum], aes(shape = set, x=mean_cogs, y=me
   scale_color_manual(values = class2col)#+ylim(0,1)
 
 
-ggplot(gtdb_dat[set != 'gtdb'], aes(x=mean_cogs, y=mean_variable/mean_cogs, col=core_gc-aux_sinsingle_gc, size = nb_genomes))+
+ggplot(gtdb_dat[db != 'gtdb'], aes(x=mean_cogs, y=mean_variable/mean_cogs, col=core_gc-aux_sinsingle_gc, size = nb_genomes))+
   geom_point( alpha = 0.7)
 
 defreshMG
+
+
+
+ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes(x=mean_cogs, y=mean_variable, shape = db, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
+  geom_point(data = anon_dat, alpha = 0.4, col = '#dcdcdc')+
+  geom_point(alpha = 0.7)+
+#  facet_wrap(~phylum, ncol=3)+
+  guides(col=guide_legend(ncol=2))+
+  theme_minimal()+
+  scale_y_log10()+scale_x_log10()+
+  theme(legend.position = "none", text = element_text(size=12))+
+  ylab("variable genome size (mean number number of COGs per genome)")+
+  xlab("genome size (mean number of COGs per genome)")+
+  scale_color_manual(values = class2col)
+
+ggsave("../0048/stuff/variable_size.pdf", width = 7.5, height = 5.5)
+
+ggplot(gtdb_dat[phylum %in% phyla_of_fig1], aes( x=mean_cogs, y=aux_sinsingle/mean_variable/sqrt(nb_genomes), shape = db, col=paste(phylum,class , sep= ";"), size = nb_genomes))+
+  geom_point(data = anon_dat, alpha = 0.4, col = "#dcdcdc")+
+  geom_point( alpha = 0.7)+
+#  geom_smooth(data = anon_dat, method = "lm", size = 1, alpha = 0.8, se=F)+
+  theme_minimal()+
+  scale_y_log10()+scale_x_log10()+
+  guides(col=guide_legend(ncol=2))+
+  ylab("auxiliary genome diversity (COGs per position per genome^0.5)")+
+  xlab("genome size (mean number of COGs per genome)")+
+  theme(legend.position = "none")+
+  scale_color_manual(values = class2col)#+ylim(0,1)
+
+ggsave("../0048/stuff/variable_genome_div.pdf", width = 7.5, height = 5.5)
