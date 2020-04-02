@@ -16,9 +16,17 @@ class mOTU:
         return len(self.members)
 
     def __repr__(self):
-        return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax = self.consensus_tax()[0].split(";")[-1])
+        return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax =  None ) #self.consensus_tax()[0].split(";")[-1])
 
-    def __init__(self, name, faas, cog_dict, checkm_dict = {}):
+    def __init__(self, **kwargs):
+        if "cog_dict" in kwargs:
+            self.__for_mOTUpan(**kwargs)
+
+        if "bins" in kwargs:
+            self.__from_bins(**kwargs)
+
+
+    def __for_mOTUpan(name, faas, cog_dict, checkm_dict):
         self.name = name
         self.faas = faas
         if  not cog_dict :
@@ -34,7 +42,7 @@ class mOTU:
             checkm_dict = {}
             for f in self.cog_dict:
                 checkm_dict[f] = 100*len(self.cog_dict[f])/max_len
-        self.members = [MetaBin(bin_name, self.cog_dict[bin_name], self.faas.get(bin_name), checkm_dict.get(bin_name)) for bin_name in self.cog_dict.keys()]
+        self.members = [MetaBin(bin_name, self.cog_dict[bin_name], self.faas.get(bin_name), None, checkm_dict.get(bin_name)) for bin_name in self.cog_dict.keys()]
         self.core = None
 
         self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
@@ -115,7 +123,7 @@ class mOTU:
         self.core = set([c for c, v in likelies.items() if v > 0])
         core_len = len(self.core)
         i = 1
-#        print("iteration 1 : ", core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
+        print("iteration 1 : ", core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
         for mag in self:
             if len(self.core) > 0:
                 mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
@@ -135,7 +143,7 @@ class mOTU:
                 mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
                 mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.01
 
-#            print("iteration",i, ": ", new_core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
+            print("iteration",i, ": ", new_core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
             if new_core_len == core_len:
                break
             else :
@@ -216,3 +224,46 @@ class mOTU:
         for v in t_pandas.values():
             v.update(tt)
         return t_pandas
+
+
+
+    def __from_bins(self, bins, name,dist_dict = None ):
+        self.name = name
+
+        self.members = bins
+        self.core = None
+        self.fastani_dict = dist_dict
+
+
+    @classmethod
+    def cluster_MetaBins(cls , all_bins, dist_dict, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_contamin = 5, sub_complete = 0, sub_contamin = 100):
+        import igraph
+
+        all_bins = {a.name : a for a in all_bins}
+
+        good_mag = lambda b : all_bins[b].checkm_complet > mag_complete and all_bins[b].checkm_contamin < mag_contamin
+        decent_sub = lambda b : all_bins[b].checkm_complet > mag_complete and all_bins[b].checkm_contamin < mag_contamin
+        good_pairs = [k for k,v  in dist_dict.items() if v > ani_cutoff and dist_dict.get((k[1],k[0]), 0) > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
+        species_graph = igraph.Graph()
+        vertexDeict = { v : i for i,v in enumerate(set([x for k in good_pairs for x in k]))}
+        rev_vertexDeict = { v : i for i,v in vertexDeict.items()}
+        species_graph.add_vertices(len(vertexDeict))
+        species_graph.add_edges([(vertexDeict[k[0]], vertexDeict[k[1]]) for k in good_pairs])
+        genome_clusters = [[rev_vertexDeict[cc] for cc in c ] for c in species_graph.components(mode=igraph.STRONG)]
+
+        left_pairs = {k : v for k, v in dist_dict.items() if v > ani_cutoff and k[0] != k[1] and ((decent_sub(k[0]) and good_mag(k[1])) or (decent_sub(k[1]) and good_mag(k[0])))}
+        subs = {l[0] : (None,0) for l in left_pairs}
+        for p,ani in left_pairs.items():
+            if subs[p[0]][1] < ani:
+                subs[p[0]] = (p[1], ani)
+
+        for k, v in subs.items():
+            for g in genome_clusters:
+                if v[0] in g :
+                    g += [k]
+
+        zeros = len(str(len(genome_clusters)))
+        motus = [ mOTU(bins = [all_bins[gg] for gg in gs], name = prefix + str(i).zfill(zeros), dist_dict = {k:v for k,v in dist_dict if k[0] in gs and k[1] in gs}) for i, gs in enumerate(genome_clusters)]
+
+
+        return motus

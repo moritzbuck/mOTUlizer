@@ -3,13 +3,14 @@ import sys
 
 class MetaBin:
     def __repr__(self) :
-        return "< bin {name} with {n} cogs>".format(n = len(self.cogs), name = self.name)
+        return "< bin {name} with {n} cogs>".format(n = len(self.cogs) if cogs else "NA", name = self.name)
 
-    def __init__(self, name, cogs,faas, checkm_complet):
+    def __init__(self, name, cogs,fnas, faas, complet, contamin = 0):
         self.name = name
         self.cogs = cogs
         self.faas = faas
-        self.checkm_complet = checkm_complet if checkm_complet else 80
+        self.checkm_complet = complet
+        self.checkm_contamin = contamin
         self.checkm_complet = self.checkm_complet if self.checkm_complet < 95 else 95
         self.new_completness = None
 

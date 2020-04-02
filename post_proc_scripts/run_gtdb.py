@@ -11,14 +11,14 @@ from ete3 import Tree
 from Bio import SeqIO
 
 
-sys.path.append("/home/moritz/repos/moritz/0039_mOTUlizer/")
+sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
 from mOTUlizer.classes.mOTU import mOTU
 
-gtdb_bac_md_file = "/home/moritz/dbs/bac120_metadata_r89.tsv"
-gtdb_ar_md_file = "/home/moritz/dbs/ar122_metadata_r89.tsv"
-local_gtdb_path = "/home/moritz/proj_folder/uppstore2018126/moritz/gtdb_genomes/"
-local_anoxic_path = "/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/mags/mOTUs/"
-anoxic_md_file = "/home/moritz/people/0023_anoxicencyclo/4500_assembly_analysis/magstats.csv"
+gtdb_bac_md_file = "/home/moritz/uppmax/dbs/bac120_metadata_r89.tsv"
+gtdb_ar_md_file = "/home/moritz/uppmax/dbs/ar122_metadata_r89.tsv"
+local_gtdb_path = "/home/moritz/uppmax/proj_folder/uppstore2018126/moritz/gtdb_genomes/"
+local_anoxic_path = "/home/moritz/uppmax/people/0023_anoxicencyclo/4500_assembly_analysis/mags/mOTUs/"
+anoxic_md_file = "/home/moritz/uppmax/people/0023_anoxicencyclo/4500_assembly_analysis/magstats.csv"
 
 md = pandas.concat([pandas.read_csv(gtdb_bac_md_file, sep="\t"),pandas.read_csv(gtdb_ar_md_file, sep="\t")])
 dd = { v[1]['accession'] : v[1]['gtdb_genome_representative']  for v in md.iterrows()}
@@ -49,8 +49,8 @@ for k,v in tqdm(anoxi_mOTUs.items()):
 aa2counts = {}
 aa2norm_counts = {}
 aa2def = {}
-path_format_1 = "/home/moritz/people/0023_anoxicencyclo/1000_processed_reads/{sample}/assemblies/megahit/binning/metabat/clean_bins/{bin}/{bin}.ffn"
-path_format_2 = "/home/moritz/people/0023_anoxicencyclo/1500_coasses/{sample}/assemblies/megahit/binning/metabat/clean_bins/{bin}/{bin}.ffn"
+path_format_1 = "/home/moritz/uppmax/people/0023_anoxicencyclo/1000_processed_reads/{sample}/assemblies/megahit/binning/metabat/clean_bins/{bin}/{bin}.ffn"
+path_format_2 = "/home/moritz/uppmax/people/0023_anoxicencyclo/1500_coasses/{sample}/assemblies/megahit/binning/metabat/clean_bins/{bin}/{bin}.ffn"
 
 for k, v in tqdm(anoxi_mOTUs.items()):
     for vv in v.values():
