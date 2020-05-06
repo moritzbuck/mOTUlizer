@@ -110,13 +110,21 @@ class mOTU:
     def get_stats(self):
         out = {}
         out[self.name] = { "nb_genomes" : len(self),
-        "core" : list(self.core),
-        "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core],
-        "singleton_cogs" : [k for k,v in self.cogCounts.items() if k not in self.core if v == 1],
-        "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog},
-        "completes" : {v.name : v.new_completness  for v in self}
+        "core" : list(self.core) if self.core else None,
+        "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core] if self.core else None ,
+        "singleton_cogs" : [k for k,v in self.cogCounts.items() if k not in self.core if v == 1] if self.core else None,
+        "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog} if self.aa2cog else None,
+        "mean_ANI" : self.get_mean_ani(),
+        "genomes" : [v.get_data() for v in self]
         }
         return out
+
+    def get_mean_ani(self):
+        dist_dict = self.fastani_matrix()
+        dists = [dist_dict.get((a.name,b.name)) for a in self for b in self if a != b]
+        missing_edges = sum([d is None for d in dists])
+        found_edges = [d is None for d in dists]
+        return {'mean_ANI' : sum(found_edges)/len(found_edges) if len(found_edges) > 0 else None, 'missing_edges' : missing_edges, 'total_edges' : len(found_edges) + missing_edges}
 
     def __core_likelyhood(self, max_it = 20):
         likelies = {cog : self.__core_likely(cog) for cog in self.cogCounts}
@@ -233,6 +241,7 @@ class mOTU:
         self.members = bins
         self.core = None
         self.fastani_dict = dist_dict
+        self.aa2cog = None
 
 
     @classmethod
@@ -242,7 +251,7 @@ class mOTU:
         all_bins = {a.name : a for a in all_bins}
 
         good_mag = lambda b : all_bins[b].checkm_complet > mag_complete and all_bins[b].checkm_contamin < mag_contamin
-        decent_sub = lambda b : all_bins[b].checkm_complet > mag_complete and all_bins[b].checkm_contamin < mag_contamin
+        decent_sub = lambda b : all_bins[b].checkm_complet > sub_complete and all_bins[b].checkm_contamin < mag_contamin and not good_mag(b)
         good_pairs = [k for k,v  in dist_dict.items() if v > ani_cutoff and dist_dict.get((k[1],k[0]), 0) > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
         species_graph = igraph.Graph()
         vertexDeict = { v : i for i,v in enumerate(set([x for k in good_pairs for x in k]))}
@@ -257,10 +266,13 @@ class mOTU:
             if subs[p[0]][1] < ani:
                 subs[p[0]] = (p[1], ani)
 
+
         for k, v in subs.items():
             for g in genome_clusters:
                 if v[0] in g :
                     g += [k]
+
+        genome_clusters = [list(set(gg)) for gg in genome_clusters]
 
         zeros = len(str(len(genome_clusters)))
         motus = [ mOTU(bins = [all_bins[gg] for gg in gs], name = prefix + str(i).zfill(zeros), dist_dict = {k:v for k,v in dist_dict if k[0] in gs and k[1] in gs}) for i, gs in enumerate(genome_clusters)]

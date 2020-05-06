@@ -35,7 +35,7 @@ If the columns are file names, the folders are removed (mainly so it can read fa
 def main(args):
     #parse and check your amino-acid files
 
-    fnas = {os.path.splitext(os.path.basename(f))[0] : f for f in args.fnas} if args.fnas else {}
+    fnas = {".".join(os.path.basename(f).split(".")[:-1]) : f for f in args.fnas} if args.fnas else {}
     ani_cutoff = args.similarity_cutoff
     similarities = args.similarities
     checkm_file = args.checkm
@@ -45,7 +45,8 @@ def main(args):
     mag_contamin = args.MAG_contamination
     sub_complete = args.SUB_completeness
     sub_contamin = args.SUB_contamination
-
+    threads = args.threads
+    keep_simi = args.keep_simi_file
 
     assert 0 < ani_cutoff < 100, "similarity cutoff needs to be between 0 and 100 (percent similarity)"
     assert all([os.path.exists(f) for f in fnas.values()]), "one or some of your fnas don't exists"
@@ -56,15 +57,17 @@ def main(args):
     if checkm_file:
         assert os.path.exists(checkm_file), "The file for checkm does not exists"
 
+
     if similarities:
         dist_dict = {}
         with open(similarities) as handle:
             for l in handle:
-                ll = l.split("\t")
-                g1 = ".".join(os.path.basename(ll[0]).split(".")[:-1])
-                g2 = ".".join(os.path.basename(ll[1]).split(".")[:-1])
-                dist = float(ll[2])
-                dist_dict[(g1,g2)] = dist
+                if "query" not in l:
+                    ll = l.split("\t")
+                    g1 = ".".join(os.path.basename(ll[0]).split(".")[:-1]) if "." in ll[0] else ll[0]
+                    g2 = ".".join(os.path.basename(ll[1]).split(".")[:-1]) if "." in ll[1] else ll[1]
+                    dist = float(ll[2])
+                    dist_dict[(g1,g2)] = dist
     else :
         dist_dict = None
 
@@ -80,21 +83,31 @@ def main(args):
 
 
 
+
     checkm_info = parse_checkm(checkm_file)
 
-    all_bins = [MetaBin(name = g, cogs = None, faas = None, fnas = fnas[g], complet = checkm_info[g]['Completeness'], contamin = checkm_info[g]['Contamination']) for g in genomes]
+
+    all_bins = [MetaBin(name = g, cogs = None, faas = None, fnas = fnas[g], complet = checkm_info[g]['Completeness'], contamin = checkm_info[g]['Contamination'], max_complete = 100) for g in genomes]
+
+
+    if dist_dict is None:
+        print("Similarities not provided, will compute them with fastANI", file = sys.stderr)
+        dist_dict = MetaBin.get_anis(all_bins, threads = threads, outfile = keep_simi)
+
 
     mOTUs = mOTU.cluster_MetaBins(all_bins, dist_dict, ani_cutoff, prefix, mag_complete, mag_contamin, sub_complete, sub_contamin)
 
-    print(mOTUs)
+    out_dict = {}
+    for m in mOTUs:
+        out_dict.update(m.get_stats())
 
-#    if args.output:
-#        out_handle = open(out_json, "w")
-#    else :
-#        out_file = sys.stdout
-#    json.dump(motu.get_stats(), out_handle)
-#    if args.output:
-#        out_handle.close()
+    if args.output:
+        out_handle = open(out_json, "w")
+    else :
+        out_handle = sys.stdout
+    json.dump(out_dict, out_handle)
+    if args.output:
+        out_handle.close()
 
     return None
 
@@ -111,8 +124,8 @@ if __name__ == "__main__":
     parser.add_argument('--SUB-completeness', '--SC', '-S', nargs = '?', type=float, default = 0, help = "completeness cutoff for recruited SUBs, default : 0")
     parser.add_argument('--SUB-contamination', '--Sc', '-s', nargs = '?', type=float, default = 0, help = "contamination cutoff for recruited SUBs, default : 0")
     parser.add_argument('--similarity-cutoff', '-i', nargs = '?', type=float, default = 95, help = "distance cutoff for making the graph, default : 95")
-
-
+    parser.add_argument('--threads', '-t', nargs = '?', type=int, default = 1, help = "number of threads, default : 1")
+    parser.add_argument('--keep-simi-file', '-K', nargs = '?', default = None, help = "keep generated similarity file if '--similarities' is not procided")
 
     args = parser.parse_args()
 
