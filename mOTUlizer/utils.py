@@ -16,7 +16,7 @@ def parse_checkm(file):
     all_lines = [re.sub(r"  +","\t", a).split("\t") for a in all_lines]
 
     header_lines = [i for i,l in enumerate(all_lines) if 'Bin Id' in l and 'Completeness' in l and 'Contamination' in l]
-    assert len(header_lines) == 1, "your completness files is badly formed, it needs a header line with 'Bin Id', 'Completeness', and 'Contamination' in it"
+    assert len(header_lines) == 1, "your completness files is badly formed, it should be TAB-separated and needs a header line with 'Bin Id', 'Completeness', and 'Contamination' in it"
 
     header_lines = header_lines[0]
     header_line = all_lines[header_lines]

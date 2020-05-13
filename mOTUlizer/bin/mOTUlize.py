@@ -8,7 +8,6 @@ import argparse
 import json
 from random import uniform
 
-
 #print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
 sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
 
@@ -57,8 +56,12 @@ def main(args):
     if checkm_file:
         assert os.path.exists(checkm_file), "The file for checkm does not exists"
 
+    print("Parsing the checkm-file")
+
+    checkm_info = parse_checkm(checkm_file)
 
     if similarities:
+        print("Loading similarities")
         dist_dict = {}
         with open(similarities) as handle:
             for l in handle:
@@ -83,19 +86,26 @@ def main(args):
 
 
 
+    assert all([g in checkm_info  for g in genomes]), "you do not have completness/contamination info for all you bins"
 
-    checkm_info = parse_checkm(checkm_file)
+    if fnas == {}:
+        fnas = {g : None for g in genomes}
 
+    print("making bin-objects")
 
     all_bins = [MetaBin(name = g, cogs = None, faas = None, fnas = fnas[g], complet = checkm_info[g]['Completeness'], contamin = checkm_info[g]['Contamination'], max_complete = 100) for g in genomes]
 
+    tt = [a for a in all_bins if a.name == "B12_megahit_metabat_bin-0683"][0]
 
     if dist_dict is None:
         print("Similarities not provided, will compute them with fastANI", file = sys.stderr)
         dist_dict = MetaBin.get_anis(all_bins, threads = threads, outfile = keep_simi)
 
+    print("making mOTUs")
 
     mOTUs = mOTU.cluster_MetaBins(all_bins, dist_dict, ani_cutoff, prefix, mag_complete, mag_contamin, sub_complete, sub_contamin)
+
+    print("making stats")
 
     out_dict = {}
     for m in mOTUs:
@@ -105,7 +115,7 @@ def main(args):
         out_handle = open(out_json, "w")
     else :
         out_handle = sys.stdout
-    json.dump(out_dict, out_handle)
+    json.dump(out_dict, out_handle, indent=4, sort_keys=True)
     if args.output:
         out_handle.close()
 

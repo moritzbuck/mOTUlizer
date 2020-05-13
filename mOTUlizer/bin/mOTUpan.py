@@ -29,7 +29,7 @@ Returns all to stdout by default.
 def main(args):
     if args.cog_file:
         try :
-            if args.cog_file.endswith(".json"):
+            if args.cog_file.endswith(".json") or args.cog_file.endswith(".gid2cog"):
                 with open(args.cog_file) as handle:
                     cog_dict = json.load(handle)
             else :
@@ -45,7 +45,13 @@ def main(args):
         cog_dict = {}
 
     #parse and check your amino-acid files
-    faas = {os.path.splitext(os.path.basename(f))[0] : f for f in args.faas} if args.faas else {}
+    if args.txt and args.faas:
+        with open(args.faas[0]) as handle:
+            faas = {os.path.splitext(os.path.basename(f.strip().rstrip(".gz")))[0] : f.strip() for f in handle.readlines()}
+    elif args.faas:
+        faas = {os.path.splitext(os.path.basename(f))[0] : f for f in args.faas}
+    else :
+        faas = {}
     assert all([os.path.exists(f) for f in faas.values()]), "one or some of your faas don't exists"
 
 
@@ -54,6 +60,9 @@ def main(args):
     if cog_dict and len(faas) > 0:
         if len(genomes) != len(faas) or len(faas) != len(cog_dict):
             print("your faas and cog_drct are not the same length,\nit might not matter just wanted to let you know.", file = sys.stderr)
+
+    if len(cog_dict) > 0 :
+        cog_dict = {g : cog_dict[g] for g in genomes}
 
     out_json = args.output
     checkm = {}
@@ -103,9 +112,14 @@ if __name__ == "__main__":
     parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction [0-100]")
     parser.add_argument('--random_seed', '--rs', action='store_true', help = "random seed completeness between 5 and 95 percent")
     parser.add_argument('--genome2cog_only', action='store_true', help = "returns genome2cog only")
-    parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot")
+    parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot, or a text file with paths to the faas (with the --txt switch)")
+    parser.add_argument('--txt', '-t', action='store_true', help = "the '--faas' switch indicates a file with paths")
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
     parser.add_argument('--name', '-n', nargs = '?', help = "if you want to name this bag of bins")
+
+    if len(sys.argv)==1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
 
     args = parser.parse_args()
 

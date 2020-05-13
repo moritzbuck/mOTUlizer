@@ -16,7 +16,9 @@ class MetaBin:
         self.fnas = fnas
         self.checkm_complet = complet
         self.checkm_contamin = contamin
-        self.checkm_complet = self.checkm_complet if self.checkm_complet and self.checkm_complet < max_complete else max_complete
+        if not self.checkm_complet is None:
+            if self.checkm_complet > max_complete:
+                self.checkm_complet =  max_complete
         self.new_completness = None
 
     def get_data(self):

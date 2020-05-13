@@ -8,6 +8,7 @@ from random import shuffle, choice
 from math import log10
 import sys
 import json
+from tqdm import tqdm
 
 mean = lambda x : sum(x)/len(x)
 
@@ -26,7 +27,7 @@ class mOTU:
             self.__from_bins(**kwargs)
 
 
-    def __for_mOTUpan(name, faas, cog_dict, checkm_dict):
+    def __for_mOTUpan(self, name, faas, cog_dict, checkm_dict):
         self.name = name
         self.faas = faas
         if  not cog_dict :
@@ -114,17 +115,18 @@ class mOTU:
         "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core] if self.core else None ,
         "singleton_cogs" : [k for k,v in self.cogCounts.items() if k not in self.core if v == 1] if self.core else None,
         "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog} if self.aa2cog else None,
-        "mean_ANI" : self.get_mean_ani(),
+        "mean_ANI" : self.get_mean_ani() if (self.fastani_dict or all([hasattr(g, "genome") for g in self])) else None,
         "genomes" : [v.get_data() for v in self]
         }
         return out
 
     def get_mean_ani(self):
         dist_dict = self.fastani_matrix()
-        dists = [dist_dict.get((a.name,b.name)) for a in self for b in self if a != b]
+        dists = [dist_dict.get((a.name,b.name)) for a in self for b in self if a != b ]
         missing_edges = sum([d is None for d in dists])
         found_edges = [d is None for d in dists]
-        return {'mean_ANI' : sum(found_edges)/len(found_edges) if len(found_edges) > 0 else None, 'missing_edges' : missing_edges, 'total_edges' : len(found_edges) + missing_edges}
+        
+        return {'mean_ANI' : sum([d for d in dists if d])/len(found_edges) if len(found_edges) > 0 else None, 'missing_edges' : missing_edges, 'total_edges' : len(found_edges) + missing_edges}
 
     def __core_likelyhood(self, max_it = 20):
         likelies = {cog : self.__core_likely(cog) for cog in self.cogCounts}
@@ -248,34 +250,54 @@ class mOTU:
     def cluster_MetaBins(cls , all_bins, dist_dict, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_contamin = 5, sub_complete = 0, sub_contamin = 100):
         import igraph
 
+        print("seeding bin-graph")
+
         all_bins = {a.name : a for a in all_bins}
+
+        tt = [(k, v.checkm_complet, v.checkm_contamin) for k, v in all_bins.items() if v.checkm_complet > 0]
 
         good_mag = lambda b : all_bins[b].checkm_complet > mag_complete and all_bins[b].checkm_contamin < mag_contamin
         decent_sub = lambda b : all_bins[b].checkm_complet > sub_complete and all_bins[b].checkm_contamin < mag_contamin and not good_mag(b)
-        good_pairs = [k for k,v  in dist_dict.items() if v > ani_cutoff and dist_dict.get((k[1],k[0]), 0) > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
+        good_pairs = [k for k,v  in tqdm(dist_dict.items()) if v > ani_cutoff and dist_dict.get((k[1],k[0]), 0) > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
         species_graph = igraph.Graph()
         vertexDeict = { v : i for i,v in enumerate(set([x for k in good_pairs for x in k]))}
         rev_vertexDeict = { v : i for i,v in vertexDeict.items()}
         species_graph.add_vertices(len(vertexDeict))
         species_graph.add_edges([(vertexDeict[k[0]], vertexDeict[k[1]]) for k in good_pairs])
+
+        print("getting clusters")
+
         genome_clusters = [[rev_vertexDeict[cc] for cc in c ] for c in species_graph.components(mode=igraph.STRONG)]
 
-        left_pairs = {k : v for k, v in dist_dict.items() if v > ani_cutoff and k[0] != k[1] and ((decent_sub(k[0]) and good_mag(k[1])) or (decent_sub(k[1]) and good_mag(k[0])))}
+        mean = lambda l : sum([len(ll) for ll in l])/len(l)
+
+        print("recruiting to graph of the", len(genome_clusters) ," mOTUs of mean length", mean(genome_clusters))
+
+
+        left_pairs = {k : v for k, v in tqdm(dist_dict.items()) if v > ani_cutoff and k[0] != k[1] and ((decent_sub(k[0]) and good_mag(k[1])) or (decent_sub(k[1]) and good_mag(k[0])))}
+        print("looking for good_left pairs")
         subs = {l[0] : (None,0) for l in left_pairs}
-        for p,ani in left_pairs.items():
+
+        print("looking for best mOTU match")
+        for p,ani in tqdm(left_pairs.items()):
             if subs[p[0]][1] < ani:
                 subs[p[0]] = (p[1], ani)
 
+        genome_clusters = [set(gg) for gg in genome_clusters]
 
-        for k, v in subs.items():
+        print("append to the", len(genome_clusters) ,"mOTUs of mean length", mean(genome_clusters))
+        for k, v in tqdm(subs.items()):
             for g in genome_clusters:
                 if v[0] in g :
-                    g += [k]
+                    g.add(k)
 
-        genome_clusters = [list(set(gg)) for gg in genome_clusters]
+        genome_clusters = [list(gg) for gg in genome_clusters]
+
+        print("processing the", len(genome_clusters) ,"mOTUs of mean length", mean(genome_clusters))
+        #print(genome_clusters)
 
         zeros = len(str(len(genome_clusters)))
-        motus = [ mOTU(bins = [all_bins[gg] for gg in gs], name = prefix + str(i).zfill(zeros), dist_dict = {k:v for k,v in dist_dict if k[0] in gs and k[1] in gs}) for i, gs in enumerate(genome_clusters)]
+        motus = [ mOTU(bins = [all_bins[gg] for gg in gs], name = prefix + str(i).zfill(zeros), dist_dict = {(k,l) : dist_dict[(k,l)] for k in gs for l in gs if (k,l) in dist_dict}) for i, gs in tqdm(enumerate(genome_clusters))]
 
 
         return motus
