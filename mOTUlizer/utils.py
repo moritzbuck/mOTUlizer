@@ -7,6 +7,7 @@ def random_name(stringLength=8):
     letters = string.ascii_uppercase
     return ''.join(random.choice(letters) for i in range(stringLength))
 
+
 def parse_checkm(file):
     # Should be able to read old checkm files, new checkm files  (e.g. checkm lineage_wf infolder datfolder > checkm_file)
     # or any TAB-serparated files with a column called 'Bin Id', 'Completeness', and 'Contamination'

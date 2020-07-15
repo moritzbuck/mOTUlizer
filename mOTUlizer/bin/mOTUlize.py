@@ -34,7 +34,14 @@ If the columns are file names, the folders are removed (mainly so it can read fa
 def main(args):
     #parse and check your amino-acid files
 
-    fnas = {".".join(os.path.basename(f).split(".")[:-1]) : f for f in args.fnas} if args.fnas else {}
+    if args.txt and args.fnas:
+        with open(args.fnas[0]) as handle:
+            fnas = {os.path.splitext(os.path.basename(f.strip().rstrip(".gz")))[0] : f.strip() for f in handle.readlines()}
+    elif args.fnas:
+        fnas = {os.path.splitext(os.path.basename(f.strip().rstrip(".gz")))[0] : f for f in args.fnas}
+    else :
+        fnas = {}
+
     ani_cutoff = args.similarity_cutoff
     similarities = args.similarities
     checkm_file = args.checkm
@@ -44,7 +51,7 @@ def main(args):
     mag_contamin = args.MAG_contamination
     sub_complete = args.SUB_completeness
     sub_contamin = args.SUB_contamination
-    threads = args.threads
+    threads = args.cpus
     keep_simi = args.keep_simi_file
 
     assert 0 < ani_cutoff < 100, "similarity cutoff needs to be between 0 and 100 (percent similarity)"
@@ -67,8 +74,8 @@ def main(args):
             for l in handle:
                 if "query" not in l:
                     ll = l.split("\t")
-                    g1 = ".".join(os.path.basename(ll[0]).split(".")[:-1]) if "." in ll[0] else ll[0]
-                    g2 = ".".join(os.path.basename(ll[1]).split(".")[:-1]) if "." in ll[1] else ll[1]
+                    g1 = ".".join(os.path.basename(ll[0]).split(".")[:-1]) if ll[0].endswith(".fna") else ll[0]
+                    g2 = ".".join(os.path.basename(ll[1]).split(".")[:-1]) if ll[1].endswith(".fna") else ll[1]
                     dist = float(ll[2])
                     dist_dict[(g1,g2)] = dist
     else :
@@ -94,8 +101,6 @@ def main(args):
     print("making bin-objects")
 
     all_bins = [MetaBin(name = g, cogs = None, faas = None, fnas = fnas[g], complet = checkm_info[g]['Completeness'], contamin = checkm_info[g]['Contamination'], max_complete = 100) for g in genomes]
-
-    tt = [a for a in all_bins if a.name == "B12_megahit_metabat_bin-0683"][0]
 
     if dist_dict is None:
         print("Similarities not provided, will compute them with fastANI", file = sys.stderr)
@@ -134,8 +139,9 @@ if __name__ == "__main__":
     parser.add_argument('--SUB-completeness', '--SC', '-S', nargs = '?', type=float, default = 0, help = "completeness cutoff for recruited SUBs, default : 0")
     parser.add_argument('--SUB-contamination', '--Sc', '-s', nargs = '?', type=float, default = 0, help = "contamination cutoff for recruited SUBs, default : 0")
     parser.add_argument('--similarity-cutoff', '-i', nargs = '?', type=float, default = 95, help = "distance cutoff for making the graph, default : 95")
-    parser.add_argument('--threads', '-t', nargs = '?', type=int, default = 1, help = "number of threads, default : 1")
+    parser.add_argument('--cpus', '-c', nargs = '?', type=int, default = 1, help = "number of threads, default : 1")
     parser.add_argument('--keep-simi-file', '-K', nargs = '?', default = None, help = "keep generated similarity file if '--similarities' is not procided")
+    parser.add_argument('--txt', '-t', action='store_true', help = "the '--fnas' switch indicates a file with paths")
 
     args = parser.parse_args()
 

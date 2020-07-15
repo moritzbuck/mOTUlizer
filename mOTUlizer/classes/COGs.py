@@ -1,5 +1,6 @@
 import tempfile
 import sys, os
+import gzip
 from mOTUlizer.config import *
 
 def compute_COGs(faas, name = "silixCOGs", precluster = False):
@@ -13,21 +14,33 @@ def compute_COGs(faas, name = "silixCOGs", precluster = False):
     prot_ids = set()
     prot2faa ={}
     for k,v in faas.items():
-        with open(v) as handle:
-            ids = [l[:-1].split()[0][1:] for l in handle if l[0] == ">"]
-            for i in ids:
-                if i in prot2faa:
-                    prot2faa[i] += [k]
-                else :
-                    prot2faa[i] = [k]
+        if not v.endswith(".gz"):
+            with open(v) as handle:
+                ids = [l[:-1].split()[0][1:] for l in handle if l[0] == ">"]
+        else :
+            with gzip.open(v) as handle:
+                ids = [l.decode()[:-1].split()[0][1:] for l in handle if l.decode()[0] == ">"]
+        for i in ids:
+            if i in prot2faa:
+                prot2faa[i] += [k]
+            else :
+                prot2faa[i] = [k]
 
     print("all v all diamond for silix", file = sys.stderr)
-    os.system("cat " + " ".join([*faas.values()]) + " > " + temp_file)
+
+    if all([faa.endswith(".gz") for faa in faas.values()]):
+        cat = "zcat "
+    elif all([not faa.endswith(".gz") for faa in faas.values()]) :
+        cat = "cat "
+    else :
+        sys.exit("Please make my life easy, either all faas gziped or none gzipped ...")
+
+    os.system(cat + " ".join([*faas.values()]) + " > " + temp_file)
     os.system("diamond makedb --db {faas} --in {faas} > /dev/null 2> /dev/null".format(faas = temp_file))
     os.system("diamond blastp --more-sensitive -p {threads} -f 6 -q {faas} --db {faas} -o {out} 2> /dev/null > /dev/null".format(faas = temp_file, out = temp_out, threads = THREADS))
 
     print("running silix", file = sys.stderr)
-    os.system("silix {faas} {out} > {clust_temp} 2> /dev/null".format(faas = temp_file, out = temp_out, clust_temp = temp_clust))
+    os.system("silix {faas} {out} > {clust_temp} #2> /dev/null".format(faas = temp_file, out = temp_out, clust_temp = temp_clust))
 
     print("parsing silix", file = sys.stderr)
     with open(temp_clust) as handle:

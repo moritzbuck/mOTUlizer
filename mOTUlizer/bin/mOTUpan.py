@@ -14,7 +14,6 @@ sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
 
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
-
 from mOTUlizer.classes.mOTU import mOTU
 
 #from mOTUlizer.config import *
@@ -49,30 +48,31 @@ def main(args):
         with open(args.faas[0]) as handle:
             faas = {os.path.splitext(os.path.basename(f.strip().rstrip(".gz")))[0] : f.strip() for f in handle.readlines()}
     elif args.faas:
-        faas = {os.path.splitext(os.path.basename(f))[0] : f for f in args.faas}
+        faas = {os.path.splitext(os.path.basename(f.strip().rstrip(".gz")))[0] : f for f in args.faas}
     else :
         faas = {}
+
     assert all([os.path.exists(f) for f in faas.values()]), "one or some of your faas don't exists"
 
 
-    genomes = set(faas.keys()).union(set(cog_dict.keys()))
-
+    genomes = set(faas.keys()).intersection(set(cog_dict.keys()))
+    print(len(genomes))
     if cog_dict and len(faas) > 0:
         if len(genomes) != len(faas) or len(faas) != len(cog_dict):
             print("your faas and cog_drct are not the same length,\nit might not matter just wanted to let you know.", file = sys.stderr)
 
     if len(cog_dict) > 0 :
-        cog_dict = {g : cog_dict[g] for g in genomes}
+        cog_dict = {g : cog_dict.get(g) for g in genomes if g in cog_dict}
 
     out_json = args.output
     checkm = {}
     if args.checkm :
-        with open(args.checkm) as handle:
-            #this is a bad fix, fix it for checkm output and json
-            col_idx = [i for i, ll in enumerate(handle.readline().split(",")) if "complet" in ll][0]
-            for l in handle:
-                if l.split(",")[0] in genomes:
-                    checkm[l.split(",")[0]] = float(l.split(",")[col_idx])
+        assert os.path.exists(args.checkm), "The file for checkm does not exists"
+
+        print("Parsing the checkm-file")
+        checkm = {k : v['Completeness'] for k,v in parse_checkm(args.checkm).items()}
+        checkm = {g : checkm[g] for g in genomes}
+
     if args.seed :
         for f in genomes:
             checkm[f] = args.seed
@@ -84,11 +84,11 @@ def main(args):
 
 
     name = args.name if args.name else random_name()
-
+    max_it = args.max_iter
     if faas is None and cogs is None:
         sys.exit("at least one of --faas and --cog_file is required")
 
-    motu = mOTU( name = name , faas = faas , cog_dict = cog_dict, checkm_dict = checkm)
+    motu = mOTU( name = name , faas = faas , cog_dict = cog_dict, checkm_dict = checkm, max_it = max_it)
 
     if args.output:
         out_handle = open(out_json, "w")
@@ -116,6 +116,7 @@ if __name__ == "__main__":
     parser.add_argument('--txt', '-t', action='store_true', help = "the '--faas' switch indicates a file with paths")
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
     parser.add_argument('--name', '-n', nargs = '?', help = "if you want to name this bag of bins")
+    parser.add_argument('--max_iter', '-m', nargs = '?', type = int , default = 20 , help = "if you want to name this bag of bins")
 
     if len(sys.argv)==1:
         parser.print_help(sys.stderr)
@@ -123,7 +124,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    print(args, file=sys.stderr)
+#    print(args, file=sys.stderr)
 
     main(args)
 
