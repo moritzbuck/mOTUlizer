@@ -245,6 +245,7 @@ class mOTU:
         self.core = None
         self.fastani_dict = dist_dict
         self.aa2cog = None
+        self.likelies = None
 
 
     @classmethod
@@ -258,7 +259,7 @@ class mOTU:
         tt = [(k, v.checkm_complet, v.checkm_contamin) for k, v in all_bins.items() if v.checkm_complet > 0]
 
         good_mag = lambda b : all_bins[b].checkm_complet > mag_complete and all_bins[b].checkm_contamin < mag_contamin
-        decent_sub = lambda b : all_bins[b].checkm_complet > sub_complete and all_bins[b].checkm_contamin < mag_contamin and not good_mag(b)
+        decent_sub = lambda b : all_bins[b].checkm_complet > sub_complete and all_bins[b].checkm_contamin < sub_contamin and not good_mag(b)
         good_pairs = [k for k,v  in dist_dict.items() if v > ani_cutoff and dist_dict.get((k[1],k[0]), 0) > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
         species_graph = igraph.Graph()
         vertexDeict = { v : i for i,v in enumerate(set([x for k in good_pairs for x in k]))}
@@ -277,12 +278,16 @@ class mOTU:
 
         left_pairs = {k : v for k, v in dist_dict.items() if v > ani_cutoff and k[0] != k[1] and ((decent_sub(k[0]) and good_mag(k[1])) or (decent_sub(k[1]) and good_mag(k[0])))}
         print("looking for good_left pairs")
-        subs = {l[0] : (None,0) for l in left_pairs}
+#        print(left_pairs)
 
+        subs = {l : (None,0) for ll in left_pairs.keys() for l in ll if not good_mag(l)}
+#        print(subs)
         print("looking for best mOTU match")
         for p,ani in left_pairs.items():
-            if subs[p[0]][1] < ani:
+            if p[0] in subs and subs[p[0]][1] < ani:
                 subs[p[0]] = (p[1], ani)
+            if p[1] in subs and subs[p[1]][1] < ani:
+                subs[p[1]] = (p[0], ani)
 
         genome_clusters = [set(gg) for gg in genome_clusters]
 
