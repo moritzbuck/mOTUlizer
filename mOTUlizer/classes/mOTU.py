@@ -29,6 +29,7 @@ class mOTU:
     def __for_mOTUpan(self, name, faas, cog_dict, checkm_dict, max_it = 20):
         self.name = name
         self.faas = faas
+        print("Creating mOTU for mOTUpan")
         if  not cog_dict :
             tt = compute_COGs(self.faas, name = name + "COG")
             self.cog_dict = tt['genome2cogs']
