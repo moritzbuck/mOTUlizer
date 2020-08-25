@@ -9,7 +9,7 @@ class MetaBin:
     def __repr__(self) :
         return "< bin {name} with {n} cogs>".format(n = len(self.cogs) if cogs else "NA", name = self.name)
 
-    def __init__(self, name, cogs,fnas, faas, complet = None, contamin = 0, max_complete = 95):
+    def __init__(self, name, cogs,fnas, faas, complet = None, contamin = 0, max_complete = 99.9):
         self.name = name
         self.cogs = cogs
         self.faas = faas

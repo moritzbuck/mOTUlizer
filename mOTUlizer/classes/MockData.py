@@ -15,14 +15,14 @@ class MockmOTU(mOTU):
     def __repr__(self) :
         return "< MockmOTU with {n} genomes, of average {c}% completness, with core/genome_len of {r} >".format(c = 100*self.mean_completeness, n = len(self), r = self.ratio)
 
-    def __init__(self, name, ratio, genome_len, nb_genomes, completeness):
+    def __init__(self, name, ratio, genome_len, nb_genomes, completeness, max_it = 20):
 
         self.ratio = ratio
         core_len = int(genome_len*self.ratio)
         core = {"CoreTrait_{}".format(i) for i in range(core_len)}
 
 
-        sub_dist = list(range(nb_genomes-1, 1,-1))
+        sub_dist = [int(nb_genomes/i) for i in range(2,1000) if int(nb_genomes/i) > 0] + [1]*100#list(range(nb_genomes-1, 1,-1)) + list(range(nb_genomes-1, 1,-1)) + list(range(nb_genomes-1, 1,-1))
 
         mock_genomes = dict()
         for k in range(nb_genomes):
@@ -39,8 +39,22 @@ class MockmOTU(mOTU):
 #        self.accessory = accessory
         self.mean_size = mean([len(m) for m in mock_genomes.values()])
         self.read_core_len = core_len
-        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = self.completenesses, max_it = 50)
+        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = { k : normal(v, 10) for k,v in self.completenesses.items()}, max_it = max_it)
 
+
+    def mock_cog_stats(self):
+        all_genes = set.union(*self.incompletes.values())
+        outp = {t : {} for t in all_genes}
+        for t,dd  in outp.items():
+            dd['freq'] = sum([t in zz for zz in self.incompletes.values()])/len(self.incompletes)
+            dd['core'] = t in self.core
+            dd['type'] = "core" if t.startswith("CoreTrait_") else "accessory"
+            dd['nb_genomes'] = len(self)
+            dd['core_len'] = len(self.core)
+            dd['real_core_len'] = self.read_core_len
+            dd['llikelihood'] = self.likelies[t]
+            dd['len_accessory_genome'] = len(all_genes) - dd['real_core_len']
+        return outp
 
     @classmethod
     def guauss_completes(cls, g, mean_completeness = 60, stdev = 10):
