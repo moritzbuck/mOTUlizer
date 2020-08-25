@@ -133,7 +133,7 @@ class mOTU:
 
     def __core_likelyhood(self, max_it = 20 ):
         likelies = {cog : self.__core_likely(cog) for cog in self.cogCounts}
-        self.core = set([c for c, v in likelies.items() if v > 0])
+        self.core = set([c for c, v in likelies.items() if v > 1])
         core_len = len(self.core)
         i = 1
         print("iteration 1 : ", core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)

@@ -20,21 +20,9 @@ class MockmOTU(mOTU):
         self.ratio = ratio
         core_len = int(genome_len*self.ratio)
         core = {"CoreTrait_{}".format(i) for i in range(core_len)}
-        weird_dist = [round(e*nb_genomes) for e in emp_disp]
-        nb_variable_genes = int(genome_len*(1-ratio))*nb_genomes
-        sub_dist = [nb_variable_genes +1]
-        i=1
-        while sum(sub_dist) > nb_variable_genes:
-            sub_dist = [weird_dist[k] for k in range(0,len(weird_dist), i) if weird_dist[k] > 0]
-            i += 1
-        if i >2:
-            sub_dist = [weird_dist[k] for k in range(0,len(weird_dist), i-2) if weird_dist[k] > 0]
-        else:
-            sub_dist = [weird_dist[k] for k in range(0,len(weird_dist), i-1) if weird_dist[k] > 0]
 
-        tests = [ sub_dist[:i] for i in range(len(sub_dist)) if sum(sub_dist[:i]) > nb_variable_genes]
-        if len(tests) >0:
-            sub_dists = tests[0]
+
+        sub_dist = list(range(nb_genomes-1, 1,-1))
 
         mock_genomes = dict()
         for k in range(nb_genomes):
@@ -47,9 +35,11 @@ class MockmOTU(mOTU):
 
         self.incompletes = {g : {vv for vv in v if random() < (completeness(g)/100)} for g, v in mock_genomes.items()}
         self.mean_completeness = mean([len({vv for vv in v if vv.startswith("CoreTrait_")})/core_len for c,v in self.incompletes.items()])
+        self.completenesses = {c : 100*len({vv for vv in v if vv.startswith("CoreTrait_")})/core_len for c,v in self.incompletes.items()}
 #        self.accessory = accessory
         self.mean_size = mean([len(m) for m in mock_genomes.values()])
-        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = {g : normal(completeness(g), 20) for g in self.incompletes}, max_it = 50)
+        self.read_core_len = core_len
+        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = self.completenesses, max_it = 50)
 
 
     @classmethod
