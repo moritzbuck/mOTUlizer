@@ -33,7 +33,8 @@ class MockmOTU(mOTU):
             sub_dist = [weird_dist[k] for k in range(0,len(weird_dist), i-1) if weird_dist[k] > 0]
 
         tests = [ sub_dist[:i] for i in range(len(sub_dist)) if sum(sub_dist[:i]) > nb_variable_genes]
-        sub_dists = tests[0]
+        if len(tests) >0:
+            sub_dists = tests[0]
 
         mock_genomes = dict()
         for k in range(nb_genomes):
@@ -48,7 +49,7 @@ class MockmOTU(mOTU):
         self.mean_completeness = mean([len({vv for vv in v if vv.startswith("CoreTrait_")})/core_len for c,v in self.incompletes.items()])
 #        self.accessory = accessory
         self.mean_size = mean([len(m) for m in mock_genomes.values()])
-        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = "length_seed", max_it = 50)
+        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = {g : normal(completeness(g), 20) for g in self.incompletes}, max_it = 50)
 
 
     @classmethod
