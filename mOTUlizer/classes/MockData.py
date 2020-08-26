@@ -22,7 +22,11 @@ class MockmOTU(mOTU):
         core = {"CoreTrait_{}".format(i) for i in range(core_len)}
 
 
-        sub_dist = [int(nb_genomes/i) for i in range(2,1000) if int(nb_genomes/i) > 0] + [1]*100#list(range(nb_genomes-1, 1,-1)) + list(range(nb_genomes-1, 1,-1)) + list(range(nb_genomes-1, 1,-1))
+        sub_dist = [int(nb_genomes/i) for i in range(2,1000) if int(nb_genomes/i) > 0] + [1]*100
+        sub_dist = list(range(nb_genomes-1, 1,-1))
+
+        self.size_accessory = sum(sub_dist)
+        self.mean_size_accessory = sum(sub_dist)/nb_genomes
 
         mock_genomes = dict()
         for k in range(nb_genomes):

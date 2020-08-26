@@ -45,12 +45,13 @@ class mOTU:
                 checkm_dict[f] = 100*len(self.cog_dict[f])/max_len
 
         self.members = [MetaBin(bin_name, cogs = self.cog_dict[bin_name], faas = self.faas.get(bin_name), fnas = None, complet = checkm_dict.get(bin_name)) for bin_name in self.cog_dict.keys()]
-        self.core = None
 
         self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
         for mag in self.members:
             for cog in mag.cogs:
                     self.cogCounts[cog] += 1
+
+        self.core = {cog for cog, counts in self.cogCounts.items() if (100*counts/len(self)) > mean(checkm_dict.values())}
 
         self.likelies = self.__core_likelyhood(max_it = max_it)
 
@@ -173,14 +174,18 @@ class mOTU:
         return sum(presence + abscence)
 
     def __pange_prob(self, cog, core_size, complet = "checkm"):
-        pool_size = sum(self.cogCounts.values())
+#        pool_size = sum(self.cogCounts.values())
+        pool_size = sum([c for k,c in  self.cogCounts.items()])
         comp = lambda mag : (mag.checkm_complet if complet =="checkm" else mag.new_completness)/100
         #presence = [1 - (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog in mag.cogs]
         #abscence = [ (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog not in mag.cogs]
 
+#        mag_prob = {mag : ( 1-1/pool_size )**len(mag.cogs) for mag in self}
 #        mag_prob = {mag : ( 1-1/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
+#        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
+#        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
 
-        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
+        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size)**len(mag.cogs) for mag in self}
 
         presence = [ log10(1 -   mag_prob[mag]) if mag_prob[mag] < 1 else MIN_PROB                for mag in self if cog in mag.cogs]
         abscence = [ log10(      mag_prob[mag]) if mag_prob[mag] > 0 else log10(1-(10**MIN_PROB)) for mag in self if cog not in mag.cogs]
