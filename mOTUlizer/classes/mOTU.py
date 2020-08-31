@@ -147,6 +147,7 @@ class mOTU:
             mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.01
         for i in range(2,max_it):
             likelies = {cog : self.__core_likely(cog, complet = "new", core_size = core_len) for cog in self.cogCounts}
+            old_core = self.core
             self.core = set([c for c, v in likelies.items() if v > likeli_cutof])
             new_core_len = len(self.core)
             for mag in self:
@@ -157,7 +158,7 @@ class mOTU:
                 mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
                 mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.01
             print("iteration",i, ": ", new_core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
-            if new_core_len == core_len:
+            if self.core == old_core:
                break
             else :
                 core_len =new_core_len
@@ -183,9 +184,9 @@ class mOTU:
 #        mag_prob = {mag : ( 1-1/pool_size )**len(mag.cogs) for mag in self}
 #        mag_prob = {mag : ( 1-1/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
 #        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
-#        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
+        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
 
-        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size)**len(mag.cogs) for mag in self}
+#        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size)**len(mag.cogs) for mag in self}
 
         presence = [ log10(1 -   mag_prob[mag]) if mag_prob[mag] < 1 else MIN_PROB                for mag in self if cog in mag.cogs]
         abscence = [ log10(      mag_prob[mag]) if mag_prob[mag] > 0 else log10(1-(10**MIN_PROB)) for mag in self if cog not in mag.cogs]
