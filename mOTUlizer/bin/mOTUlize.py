@@ -137,7 +137,7 @@ if __name__ == "__main__":
     parser.add_argument('--MAG-completeness', '--MC', '-M', nargs = '?', type=float, default = 40, help = "completeness cutoff for seed MAGs, default : 40")
     parser.add_argument('--MAG-contamination', '--Mc', '-m', nargs = '?', type=float, default = 5, help = "contamination cutoff for seed MAGs, default : 5")
     parser.add_argument('--SUB-completeness', '--SC', '-S', nargs = '?', type=float, default = 0, help = "completeness cutoff for recruited SUBs, default : 0")
-    parser.add_argument('--SUB-contamination', '--Sc', '-s', nargs = '?', type=float, default = 100, help = "contamination cutoff for recruited SUBs, default : 0")
+    parser.add_argument('--SUB-contamination', '--Sc', '-s', nargs = '?', type=float, default = 100, help = "contamination cutoff for recruited SUBs, default : 100")
     parser.add_argument('--similarity-cutoff', '-i', nargs = '?', type=float, default = 95, help = "distance cutoff for making the graph, default : 95")
     parser.add_argument('--cpus', '-c', nargs = '?', type=int, default = 1, help = "number of threads, default : 1")
     parser.add_argument('--keep-simi-file', '-K', nargs = '?', default = None, help = "keep generated similarity file if '--similarities' is not procided")

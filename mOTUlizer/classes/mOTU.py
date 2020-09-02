@@ -29,6 +29,7 @@ class mOTU:
     def __for_mOTUpan(self, name, faas, cog_dict, checkm_dict, max_it = 20):
         self.name = name
         self.faas = faas
+        print("Creating mOTU for mOTUpan")
         if  not cog_dict :
             tt = compute_COGs(self.faas, name = name + "COG")
             self.cog_dict = tt['genome2cogs']
@@ -44,12 +45,13 @@ class mOTU:
                 checkm_dict[f] = 100*len(self.cog_dict[f])/max_len
 
         self.members = [MetaBin(bin_name, cogs = self.cog_dict[bin_name], faas = self.faas.get(bin_name), fnas = None, complet = checkm_dict.get(bin_name)) for bin_name in self.cog_dict.keys()]
-        self.core = None
 
         self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
         for mag in self.members:
             for cog in mag.cogs:
                     self.cogCounts[cog] += 1
+
+        self.core = {cog for cog, counts in self.cogCounts.items() if (100*counts/len(self)) > mean(checkm_dict.values())}
 
         self.likelies = self.__core_likelyhood(max_it = max_it)
 
@@ -114,7 +116,7 @@ class mOTU:
         "core" : list(self.core) if self.core else None,
         "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core] if self.core else None ,
         "singleton_cogs" : [k for k,v in self.cogCounts.items() if k not in self.core if v == 1] if self.core else None,
-        "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog} if self.aa2cog else None,
+        "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog} if self.aa2cog else ({k : list(v) for k,v  in self.cog_dict.items()} if self.cog_dict else None),
         "mean_ANI" : self.get_mean_ani() if (hasattr(self, 'fastani_dict') or all([hasattr(g, "genome") for g in self])) else None,
         "ANIs" : [[k[0], k[1], v] for k, v in self.fastani_matrix().items()] if (hasattr(self, 'fastani_dict')  or all([hasattr(g, "genome") for g in self])) else None,
         "genomes" : [v.get_data() for v in self],
@@ -130,9 +132,9 @@ class mOTU:
 
         return {'mean_ANI' : sum([d for d in dists if d])/len(found_edges) if len(found_edges) > 0 else None, 'missing_edges' : missing_edges, 'total_edges' : len(found_edges) + missing_edges}
 
-    def __core_likelyhood(self, max_it = 20 ):
+    def __core_likelyhood(self, max_it = 20, likeli_cutof = 0 ):
         likelies = {cog : self.__core_likely(cog) for cog in self.cogCounts}
-        self.core = set([c for c, v in likelies.items() if v > 0])
+        self.core = set([c for c, v in likelies.items() if v > likeli_cutof])
         core_len = len(self.core)
         i = 1
         print("iteration 1 : ", core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
@@ -142,10 +144,11 @@ class mOTU:
             else :
                 mag.new_completness = 0
             mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
-            mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.1
+            mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.01
         for i in range(2,max_it):
             likelies = {cog : self.__core_likely(cog, complet = "new", core_size = core_len) for cog in self.cogCounts}
-            self.core = set([c for c, v in likelies.items() if v > 0])
+            old_core = self.core
+            self.core = set([c for c, v in likelies.items() if v > likeli_cutof])
             new_core_len = len(self.core)
             for mag in self:
                 if len(self.core) > 0:
@@ -155,7 +158,7 @@ class mOTU:
                 mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
                 mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.01
             print("iteration",i, ": ", new_core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
-            if new_core_len == core_len:
+            if self.core == old_core:
                break
             else :
                 core_len =new_core_len
@@ -172,14 +175,18 @@ class mOTU:
         return sum(presence + abscence)
 
     def __pange_prob(self, cog, core_size, complet = "checkm"):
-        pool_size = sum(self.cogCounts.values())
+#        pool_size = sum(self.cogCounts.values())
+        pool_size = sum([c for k,c in  self.cogCounts.items()])
         comp = lambda mag : (mag.checkm_complet if complet =="checkm" else mag.new_completness)/100
         #presence = [1 - (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog in mag.cogs]
         #abscence = [ (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog not in mag.cogs]
 
-#        presence = [ log10(1 -   ( 1 - 1/len(self.cogCounts))**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog in mag.cogs]
-#        abscence = [       log10(( 1 - 1/len(self.cogCounts))**(len(mag.cogs)-(core_size*comp(mag)))) for mag in self if cog not in mag.cogs]
+#        mag_prob = {mag : ( 1-1/pool_size )**len(mag.cogs) for mag in self}
+#        mag_prob = {mag : ( 1-1/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
+#        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
         mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
+
+#        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size)**len(mag.cogs) for mag in self}
 
         presence = [ log10(1 -   mag_prob[mag]) if mag_prob[mag] < 1 else MIN_PROB                for mag in self if cog in mag.cogs]
         abscence = [ log10(      mag_prob[mag]) if mag_prob[mag] > 0 else log10(1-(10**MIN_PROB)) for mag in self if cog not in mag.cogs]
@@ -198,44 +205,6 @@ class mOTU:
 
     def get_pangenome_size(self, singletons = False):
         return len([k for k,v in self.cogCounts.items() if k not in self.core and v > (0 if singletons else 1)])
-
-
-    def rarefy_pangenome(self, reps = 100, singletons = False, custom_cogs = None):
-        def __min_95(ll):
-            ll.sort_values()
-            return list(ll.sort_values())[round(len(ll)*0.05)]
-
-        def __max_95(ll):
-            ll.sort_values()
-            return list(ll.sort_values())[round(len(ll)*0.95)]
-
-        def __genome_count(ll):
-            return ll[0]
-
-        __genome_count.__name__ = "genome_count"
-        __max_95.__name__ = "max_95"
-        __min_95.__name__ = "min_95"
-
-        pange = set.union(*custom_cogs) if custom_cogs else {k for k,v in self.cogCounts.items() if k not in self.core and v > (0 if singletons else 1)}
-        series = []
-        for i in range(reps):
-            series += [{ 'rep' : i , 'genome_count' : 0, 'pangenome_size' : 0}]
-            m = custom_cogs if custom_cogs else [m.cogs for m in self.members.copy()]
-            shuffle(m)
-            founds = set()
-            for j,mm in enumerate(m):
-                founds = founds.union(mm.intersection(pange))
-                series += [{ 'rep' : i , 'genome_count' : j+1, 'pangenome_size' : len(founds)}]
-
-        t_pandas = pandas.DataFrame.from_records(series)[['genome_count', 'pangenome_size']]
-        t_pandas = t_pandas.groupby('genome_count').agg({'genome_count' : [__genome_count] ,'pangenome_size' : [mean, std, __min_95, __max_95]} )
-        t_pandas.columns = ["rr_" + p[1] for p in t_pandas.columns]
-        t_pandas = t_pandas.to_dict(orient="index")
-        tt = self.get_otu_stats()
-        for v in t_pandas.values():
-            v.update(tt)
-        return t_pandas
-
 
 
     def __from_bins(self, bins, name,dist_dict = None ):

@@ -12,6 +12,7 @@ from random import uniform
 #print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
 sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
 
+import mOTUlizer
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
 from mOTUlizer.classes.mOTU import mOTU
@@ -23,9 +24,13 @@ From a buch of amino-acid sequences or COG-sets, computes concensus AA/COG sets.
 
 Returns all to stdout by default.
 """
-
+__checkm_default__ = 95
 
 def main(args):
+    if args.version:
+        print("{script} Version {version}".format(script = __file__, version = mOTUlizer.__version__))
+        sys.exit()
+
     if args.cog_file:
         try :
             if args.cog_file.endswith(".json") or args.cog_file.endswith(".gid2cog"):
@@ -55,8 +60,12 @@ def main(args):
     assert all([os.path.exists(f) for f in faas.values()]), "one or some of your faas don't exists"
 
 
-    genomes = set(faas.keys()).intersection(set(cog_dict.keys()))
-    print(len(genomes))
+    if len(faas) > 0:
+        genomes = set(faas.keys()).intersection(set(cog_dict.keys()))
+    else :
+        genomes = set(cog_dict.keys())
+    print("len cog dict" , len(cog_dict))
+
     if cog_dict and len(faas) > 0:
         if len(genomes) != len(faas) or len(faas) != len(cog_dict):
             print("your faas and cog_drct are not the same length,\nit might not matter just wanted to let you know.", file = sys.stderr)
@@ -71,8 +80,10 @@ def main(args):
 
         print("Parsing the checkm-file")
         checkm = {k : v['Completeness'] for k,v in parse_checkm(args.checkm).items()}
-        checkm = {g : checkm[g] for g in genomes}
-
+        checkm = {g : checkm.get(g) for g in genomes}
+        if not all([v for v in checkm.values()]):
+            print("you did not have completeness for all bins/genomes, abscent values have been put to default value, e.g. " + str(__checkm_default__))
+            checkm = {k : v if v  else __checkm_default__ for k,v in checkm.items()}
     if args.seed :
         for f in genomes:
             checkm[f] = args.seed
@@ -88,6 +99,8 @@ def main(args):
     if faas is None and cogs is None:
         sys.exit("at least one of --faas and --cog_file is required")
 
+    print(len(genomes), " genomes in your clade")
+
     motu = mOTU( name = name , faas = faas , cog_dict = cog_dict, checkm_dict = checkm, max_it = max_it)
 
     if args.output:
@@ -95,7 +108,7 @@ def main(args):
     else :
         out_file = sys.stdout
     if not args.genome2cog_only:
-        json.dump(motu.get_stats(), out_handle)
+        json.dump(motu.get_stats(), out_handle, indent=4, sort_keys=True)
     else :
         json.dump({k : list(v) for k,v in motu.cog_dict.items()}, out_handle)
     if args.output:
@@ -104,11 +117,11 @@ def main(args):
     return None
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()#prog = "mOTUlizer", description=description_text, epilog = "Let's do this")
+    parser = argparse.ArgumentParser(prog = "mOTUpan.py", description=description_text, epilog = "Let's do this")
     parser.add_argument('--output', '-o', nargs = '?', help = "send output to this file")
     parser.add_argument('--force', '-f', action='store_true', help = "force execution answering default answers")
     parser.add_argument('--checkm', '-k',nargs = '?', help = "checkm file if you want to see completnesses with it")
-    parser.add_argument('--seed', '-s', type = float , nargs = '?', help = "seed completeness, advice a number around 90 (95 default)")
+    parser.add_argument('--seed', '-s', type = float , nargs = '?', help = "seed completeness, advice a number around 90 ({} default)".format(__checkm_default__))
     parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction [0-100]")
     parser.add_argument('--random_seed', '--rs', action='store_true', help = "random seed completeness between 5 and 95 percent")
     parser.add_argument('--genome2cog_only', action='store_true', help = "returns genome2cog only")
@@ -117,6 +130,7 @@ if __name__ == "__main__":
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
     parser.add_argument('--name', '-n', nargs = '?', help = "if you want to name this bag of bins")
     parser.add_argument('--max_iter', '-m', nargs = '?', type = int , default = 20 , help = "if you want to name this bag of bins")
+    parser.add_argument('--version','-v', action="store_true", help = "get version")
 
     if len(sys.argv)==1:
         parser.print_help(sys.stderr)

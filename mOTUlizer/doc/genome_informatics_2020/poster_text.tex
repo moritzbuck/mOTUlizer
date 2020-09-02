@@ -1,0 +1,14 @@
+
+$$\log(p_{\textrm{trait\textbar core}})=\sum_{\substack{\textrm{g in mOTU}\\ \textrm{if trait in g}}} \log({p_{\textrm{trait in g\textbar core}}}) + \sum_{\substack{\textrm{g in mOTU}\\ \textrm{if trait not in g}}}\log{(1-p_{\textrm{trait in g\textbar  core}})}$$
+
+$$p_{\textrm{trait in g\textbar core}}=c_g$$
+
+
+# scale fact = 2.5
+
+$$\log(p_{\textrm{trait\textbar aux}})=\sum_{\substack{\textrm{g in mOTU}\\ \textrm{if trait in g}}} \log(1-\bar{p}_{\textrm{trait in g\textbar aux}}) + \sum_{\substack{\textrm{g in mOTU}\\ \textrm{if trait not in g}}} \log(\bar{p}_{\textrm{trait in g\textbar aux}})$$
+
+
+$$\bar{p}_{\textrm{trait in g \textbar aux}}=(1-\frac{| \textrm{trait}| }{| G| })^{| g| -c_g| \textrm{core}_{\textrm{mOTU}}| }$$
+
+$$LLHR=\log{(p_{\textrm{trait\textbar core}})}-log{(p_{\textrm{trait\textbar aux}})}$$,

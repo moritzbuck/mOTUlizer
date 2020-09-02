@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="mOTUlizer", # Replace with your own username
-    version="0.0.2",
+    version="0.0.3",
     author="Moritz Buck",
     author_email="moritz.buck@slu.se",
     description="making OTUs from genomes, and stats on them. and maybe even core-genomes",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/moritzbuck/0039_mOTUlizer/tree/dev",
+    url="https://github.com/moritzbuck/0039_mOTUlizer/",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
