@@ -12,6 +12,7 @@ from random import uniform
 #print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
 sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
 
+import mOTUlizer
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
 from mOTUlizer.classes.mOTU import mOTU
@@ -26,6 +27,10 @@ Returns all to stdout by default.
 __checkm_default__ = 95
 
 def main(args):
+    if args.version:
+        print("{script} Version {version}".format(script = __file__, version = mOTUlizer.__version__))
+        sys.exit()
+
     if args.cog_file:
         try :
             if args.cog_file.endswith(".json") or args.cog_file.endswith(".gid2cog"):
@@ -125,6 +130,7 @@ if __name__ == "__main__":
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
     parser.add_argument('--name', '-n', nargs = '?', help = "if you want to name this bag of bins")
     parser.add_argument('--max_iter', '-m', nargs = '?', type = int , default = 20 , help = "if you want to name this bag of bins")
+    parser.add_argument('--version','-v', action="store_true", help = "get version")
 
     if len(sys.argv)==1:
         parser.print_help(sys.stderr)
