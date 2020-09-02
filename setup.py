@@ -11,7 +11,7 @@ setuptools.setup(
     description="making OTUs from genomes, and stats on them. and maybe even core-genomes",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/moritzbuck/0039_mOTUlizer/tree/dev",
+    url="https://github.com/moritzbuck/0039_mOTUlizer/",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
