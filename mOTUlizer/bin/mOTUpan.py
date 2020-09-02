@@ -12,7 +12,7 @@ from random import uniform
 #print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
 sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
 
-import mOTUlizer
+from mOTUlizer import __version__
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
 from mOTUlizer.classes.mOTU import mOTU
@@ -28,7 +28,7 @@ __checkm_default__ = 95
 
 def main(args):
     if args.version:
-        print("{script} Version {version}".format(script = __file__, version = mOTUlizer.__version__))
+        print("{script} Version {version}".format(script = __file__, version = __version__))
         sys.exit()
 
     if args.cog_file:
