@@ -1,4 +1,4 @@
-from random import random, sample
+from random import random, sample, choice
 from mOTUlizer.classes.mOTU import mOTU, mean
 from collections import defaultdict
 from numpy.random import normal
