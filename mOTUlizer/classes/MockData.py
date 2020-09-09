@@ -1,27 +1,25 @@
 from random import random, sample
 from mOTUlizer.classes.mOTU import mOTU, mean
 from collections import defaultdict
-from tqdm import tqdm
 from numpy.random import normal
 from numpy import floor, mean
 
 genome2guass = {}
 
-with open("mOTUlizer/data/Efeacalis.csv") as handle:
-    emp_disp = [int(l[:-1].split(",")[-1])/691 for l in handle if "accessory" in l]
-gene_count = sum(emp_disp)
-
 class MockmOTU(mOTU):
     def __repr__(self) :
         return "< MockmOTU with {n} genomes, of average {c}% completness, with core/genome_len of {r} >".format(c = 100*self.mean_completeness, n = len(self), r = self.ratio)
 
-    def __init__(self, name, core_len, nb_genomes, completeness, max_it = 20):
+    def __init__(self, name, core_len, nb_genomes, completeness, max_it = 20, accessory = None):
 
         core = {"CoreTrait_{}".format(i) for i in range(core_len)}
 
 
-        sub_dist = [int(nb_genomes/i) for i in range(2,1000) if int(nb_genomes/i) > 0] + [1]*100
-        sub_dist = list(range(nb_genomes-1, 1,-1))
+        if accessory is None:
+            sub_dist = [int(nb_genomes/i) for i in range(2,1000) if int(nb_genomes/i) > 0] + [1]*100
+            sub_dist = list(range(nb_genomes-1, 1,-1))
+        else :
+            sub_dist = accessory
 
         self.size_accessory = sum(sub_dist)
         self.mean_size_accessory = sum(sub_dist)/nb_genomes

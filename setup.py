@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="mOTUlizer", # Replace with your own username
-    version="0.0.3",
+    version="0.1.0",
     author="Moritz Buck",
     author_email="moritz.buck@slu.se",
     description="making OTUs from genomes, and stats on them. and maybe even core-genomes",

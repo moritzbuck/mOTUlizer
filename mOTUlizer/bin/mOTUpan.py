@@ -8,11 +8,10 @@ import argparse
 import json
 from random import uniform
 
-
 #print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
-sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
+#sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
 
-import mOTUlizer
+from mOTUlizer import __version__
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
 from mOTUlizer.classes.mOTU import mOTU
@@ -28,7 +27,7 @@ __checkm_default__ = 95
 
 def main(args):
     if args.version:
-        print("{script} Version {version}".format(script = __file__, version = mOTUlizer.__version__))
+        print("{script} Version {version}".format(script = __file__, version = __version__))
         sys.exit()
 
     if args.cog_file:
@@ -102,13 +101,15 @@ def main(args):
     print(len(genomes), " genomes in your clade")
 
     motu = mOTU( name = name , faas = faas , cog_dict = cog_dict, checkm_dict = checkm, max_it = max_it)
+    stats = motu.get_stats()
+    stats[name].update(motu.roc_values())
 
     if args.output:
         out_handle = open(out_json, "w")
     else :
         out_file = sys.stdout
     if not args.genome2cog_only:
-        json.dump(motu.get_stats(), out_handle, indent=4, sort_keys=True)
+        json.dump(stats, out_handle, indent=4, sort_keys=True)
     else :
         json.dump({k : list(v) for k,v in motu.cog_dict.items()}, out_handle)
     if args.output:
