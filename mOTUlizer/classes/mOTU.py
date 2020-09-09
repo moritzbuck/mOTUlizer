@@ -4,10 +4,11 @@ import subprocess
 import tempfile
 import os
 from mOTUlizer.config import *
-from random import shuffle, choice
+from random import shuffle, choice, choices
 from math import log10
 import sys
 import json
+
 
 mean = lambda x : sum(x)/len(x)
 
@@ -45,7 +46,7 @@ class mOTU:
                 checkm_dict[f] = 100*len(self.cog_dict[f])/max_len
 
         self.members = [MetaBin(bin_name, cogs = self.cog_dict[bin_name], faas = self.faas.get(bin_name), fnas = None, complet = checkm_dict.get(bin_name)) for bin_name in self.cog_dict.keys()]
-
+        self.mock = None
         self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
         for mag in self.members:
             for cog in mag.cogs:
@@ -57,6 +58,24 @@ class mOTU:
 
     def __getitem__(self, i):
         return self.members[i]
+
+
+    def roc_values(self):
+        from mOTUlizer.classes.MockData import MockmOTU
+
+        if self.mock is None:
+            completnesses = {"Genome_{}".format(i) : c.new_completness for i,c in enumerate(self)}
+
+            accessory = sorted([v for k,v in self.cogCounts.items() if k not in self.core])
+            missing = int(sum(accessory)*(1-mean(list(completnesses.values()))/100))
+            addeds = choices(list(range(len(accessory))), weights = accessory, k = missing)
+            for k in addeds :
+                accessory[k] += 1
+
+            self.mock = MockmOTU(self.name + "_mock", len(self.core), len(self), lambda g : completnesses[g], accessory = accessory)
+        fpr = sum([not c.startswith("CoreTrait_") for c in self.mock.core])/len([not c.startswith("CoreTrait_") for c in self.mock.core])
+        return { 'recall' : self.mock.recall, 'lowest_false' : self.mock.lowest_false, 'fpr' : fpr }
+
 
     def avg_cog_content(self):
         return sum([len(m.cogs) for m in self.members])/len(self)
