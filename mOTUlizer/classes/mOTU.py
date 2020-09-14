@@ -47,7 +47,7 @@ class mOTU:
 
         self.members = [MetaBin(bin_name, cogs = self.cog_dict[bin_name], faas = self.faas.get(bin_name), fnas = None, complet = checkm_dict.get(bin_name)) for bin_name in self.cog_dict.keys()]
         self.mock = None
-        self.cogCounts = {c : 0 for c in set.union(*[mag.cogs for mag in self.members])}
+        self.cogCounts = {c : 0 for c in set.union(set([cog for mag in self.members for cog in mag.cogs]))}
         for mag in self.members:
             for cog in mag.cogs:
                     self.cogCounts[cog] += 1
@@ -73,8 +73,7 @@ class mOTU:
                 accessory[k] += 1
 
             self.mock = MockmOTU(self.name + "_mock", len(self.core), len(self), lambda g : completnesses[g], accessory = accessory)
-        fpr = sum([not c.startswith("CoreTrait_") for c in self.mock.core])/len([not c.startswith("CoreTrait_") for c in self.mock.core])
-        return { 'recall' : self.mock.recall, 'lowest_false' : self.mock.lowest_false, 'fpr' : fpr }
+        return { 'recall' : self.mock.recall, 'lowest_false' : self.mock.lowest_false, 'fpr' : self.mock.fpr }
 
 
     def avg_cog_content(self):

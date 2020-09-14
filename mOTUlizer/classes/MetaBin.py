@@ -11,7 +11,7 @@ class MetaBin:
 
     def __init__(self, name, cogs,fnas, faas, complet = None, contamin = 0, max_complete = 99.9):
         self.name = name
-        self.cogs = cogs
+        self.cogs = cogs if type(cogs) != str else set([cogs])
         self.faas = faas
         self.fnas = fnas
         self.checkm_complet = complet

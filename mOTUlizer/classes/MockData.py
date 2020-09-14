@@ -14,7 +14,6 @@ class MockmOTU(mOTU):
 
         core = {"CoreTrait_{}".format(i) for i in range(core_len)}
 
-
         if accessory is None:
             sub_dist = [int(nb_genomes/i) for i in range(2,1000) if int(nb_genomes/i) > 0] + [1]*100
             sub_dist = list(range(nb_genomes-1, 1,-1))
@@ -29,27 +28,40 @@ class MockmOTU(mOTU):
             mock_genomes["Genome_{}".format(k)] = list(core)
 
         for i,v in enumerate(sub_dist):
-            genomes = sample(list(mock_genomes.keys()), v)
+            genomes = sample(list(mock_genomes.keys()), v if v < len(mock_genomes) else len(mock_genomes) )
             for g in genomes:
                 mock_genomes[g] += ["AccessoryTrait_{}".format(i)]
 
         self.incompletes = {g : {vv for vv in v if random() < (completeness(g)/100)} for g, v in mock_genomes.items()}
 
+        to_rm = []
         for k, v in self.incompletes.items():
             if len(v) == 0:
-                choice(core)
+                if len(core) > 0:
+                    self.incompletes[k] = choice(list(core))
 
-        self.mean_completeness = mean([len({vv for vv in v if vv.startswith("CoreTrait_")})/core_len for c,v in self.incompletes.items()])
-        self.completenesses = {c : 100*len({vv for vv in v if vv.startswith("CoreTrait_")})/core_len for c,v in self.incompletes.items()}
-#        self.accessory = accessory
+        if core_len == 0:
+            self.mean_completeness = "NA"
+            self.completenesses = {c : 0 for c,v in self.incompletes.items()}
+        else :
+            self.mean_completeness = mean([len({vv for vv in v if vv.startswith("CoreTrait_")})/core_len for c,v in self.incompletes.items()])
+            self.completenesses = {c : 100*len({vv for vv in v if vv.startswith("CoreTrait_")})/core_len for c,v in self.incompletes.items()}
+    #        self.accessory = accessory
         self.mean_size = mean([len(m) for m in mock_genomes.values()])
         self.real_core_len = core_len
 
         zerifneg = lambda g: 0.001 if g < 0 else g
         super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = { k : zerifneg(normal(v, 10)) for k,v in self.completenesses.items()}, max_it = max_it)
-        self.recall = len(core.intersection(self.core))/core_len
+        if core_len == 0:
+            self.recall = "NA"
+            self.fpr = "NA"
+        else :
+            self.recall = len(core.intersection(self.core))/core_len
+            self.fpr = sum([not c.startswith("CoreTrait_") for c in self.core])/len([not c.startswith("CoreTrait_") for c in self.core])
+
         self.lowest_false = {k : v for k,v in self.cogCounts.items() if k in self.core and k not in core}
         self.lowest_false = 1 if(len(self.lowest_false) ==0) else min(self.lowest_false.items(), key = lambda x : x[1])[1]/len(self)
+
 
     def mock_cog_stats(self):
         all_genes = set.union(*self.incompletes.values())
