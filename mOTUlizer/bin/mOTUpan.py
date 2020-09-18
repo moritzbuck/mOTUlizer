@@ -26,10 +26,6 @@ Returns all to stdout by default.
 __checkm_default__ = 95
 
 def main(args):
-    if args.version:
-        print("{script} Version {version}".format(script = __file__, version = __version__))
-        sys.exit()
-
     if args.cog_file:
         try :
             if args.cog_file.endswith(".json") or args.cog_file.endswith(".gid2cog"):
@@ -133,11 +129,16 @@ if __name__ == "__main__":
     parser.add_argument('--max_iter', '-m', nargs = '?', type = int , default = 20 , help = "if you want to name this bag of bins")
     parser.add_argument('--version','-v', action="store_true", help = "get version")
 
+    args = parser.parse_args()
+
     if len(sys.argv)==1:
         parser.print_help(sys.stderr)
         sys.exit(1)
 
-    args = parser.parse_args()
+    if args.version:
+        print("{script} Version {version}".format(script = __file__, version = __version__))
+        sys.exit()
+
 
 #    print(args, file=sys.stderr)
 

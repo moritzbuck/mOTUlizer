@@ -142,8 +142,17 @@ if __name__ == "__main__":
     parser.add_argument('--cpus', '-c', nargs = '?', type=int, default = 1, help = "number of threads, default : 1")
     parser.add_argument('--keep-simi-file', '-K', nargs = '?', default = None, help = "keep generated similarity file if '--similarities' is not procided")
     parser.add_argument('--txt', '-t', action='store_true', help = "the '--fnas' switch indicates a file with paths")
+    parser.add_argument('--version','-v', action="store_true", help = "get version")
 
     args = parser.parse_args()
+
+    if len(sys.argv)==1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+
+    if args.version:
+        print("{script} Version {version}".format(script = __file__, version = __version__))
+        sys.exit()
 
 #    print(args, file=sys.stderr)
 

@@ -134,7 +134,7 @@ class mOTU:
         "core" : list(self.core) if self.core else None,
         "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core] if self.core else None ,
         "singleton_cogs" : [k for k,v in self.cogCounts.items() if k not in self.core if v == 1] if self.core else None,
-        "cogs" : {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog} if self.aa2cog else ({k : list(v) for k,v  in self.cog_dict.items()} if self.cog_dict else None),
+        "cogs" : None if self.cog_dict is None else {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog} if self.aa2cog else ({k : list(v) for k,v  in self.cog_dict.items()} if self.cog_dict else None),
         "mean_ANI" : self.get_mean_ani() if (hasattr(self, 'fastani_dict') or all([hasattr(g, "genome") for g in self])) else None,
         "ANIs" : [[k[0], k[1], v] for k, v in self.fastani_matrix().items()] if (hasattr(self, 'fastani_dict')  or all([hasattr(g, "genome") for g in self])) else None,
         "genomes" : [v.get_data() for v in self],
@@ -233,7 +233,7 @@ class mOTU:
         self.fastani_dict = dist_dict
         self.aa2cog = None
         self.likelies = None
-
+        self.cog_dict = None
 
     @classmethod
     def cluster_MetaBins(cls , all_bins, dist_dict, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_contamin = 5, sub_complete = 0, sub_contamin = 100):
