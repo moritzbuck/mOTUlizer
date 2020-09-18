@@ -148,7 +148,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if len(sys.argv)==1 or args.version:
-        parser.print_help(sys.stderr)
+        if len(sys.argv)==1:
+            parser.print_help(sys.stderr)
         print("{script} Version {version}".format(script = __file__, version = __version__))
         sys.exit(1)
 

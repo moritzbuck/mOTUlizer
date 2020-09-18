@@ -133,6 +133,7 @@ if __name__ == "__main__":
 
     if len(sys.argv)==1:
         parser.print_help(sys.stderr)
+        print("{script} Version {version}".format(script = __file__, version = __version__))
         sys.exit(1)
 
     if args.version:

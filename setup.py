@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="mOTUlizer", # Replace with your own username
-    version="0.1.2",
+    version="0.1.2a",
     author="Moritz Buck",
     author_email="moritz.buck@slu.se",
     description="making OTUs from genomes, and stats on them. and maybe even core-genomes",
@@ -14,7 +14,7 @@ setuptools.setup(
     url="https://github.com/moritzbuck/0039_mOTUlizer/",
     packages=setuptools.find_packages(),
     install_requires = [
-    "igraph"
+    "python-igraph"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
