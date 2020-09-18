@@ -15,6 +15,7 @@ from mOTUlizer.classes import *
 from mOTUlizer.utils import *
 from mOTUlizer.classes.MetaBin import MetaBin
 from mOTUlizer.classes.mOTU import mOTU
+from mOTUlizer import __version__
 
 #from mOTUlizer.config import *
 
@@ -130,7 +131,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "mOTUlize", description=description_text, epilog = "Let's do this")
     parser.add_argument('--output', '-o', nargs = '?', help = "send output to this file")
     parser.add_argument('--force', '-f', action='store_true', help = "force execution answering default answers")
-    parser.add_argument('--checkm', '-k',nargs = '?', help = "checkm file (or whatever you want to use as completness)", required=True)
+    parser.add_argument('--checkm', '-k',nargs = '?', help = "checkm file (or whatever you want to use as completness)")
     parser.add_argument('--similarities', '-I', nargs = '?', help = "file containing similarities between MAGs, if not provided, will use fastANI to compute one")
     parser.add_argument('--fnas','-F', nargs = '*', help = "list of nucleotide fasta-files of MAGs or whatnot")
     parser.add_argument('--prefix', '-n', nargs = '?', default = "mOTU_", help = "prefix for the mOTU names, default : mOTU_ ")
@@ -146,13 +147,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if len(sys.argv)==1:
+    if len(sys.argv)==1 or args.version:
         parser.print_help(sys.stderr)
+        print("{script} Version {version}".format(script = __file__, version = __version__))
         sys.exit(1)
 
-    if args.version:
-        print("{script} Version {version}".format(script = __file__, version = __version__))
-        sys.exit()
+    if not args.checkm:
+        print("mOTUlize: error: the following arguments are required: --checkm/-k")
+        sys.exit(1)
+
 
 #    print(args, file=sys.stderr)
 
