@@ -68,9 +68,10 @@ class mOTU:
 
             accessory = sorted([v for k,v in self.cogCounts.items() if k not in self.core])
             missing = int(sum(accessory)*(1-mean(list(completnesses.values()))/100))
-            addeds = choices(list(range(len(accessory))), weights = accessory, k = missing)
-            for k in addeds :
-                accessory[k] += 1
+            if len(accessory) > 0:
+                addeds = choices(list(range(len(accessory))), weights = accessory, k = missing)
+                for k in addeds :
+                    accessory[k] += 1
 
             self.mock = MockmOTU(self.name + "_mock", len(self.core), len(self), lambda g : completnesses[g], accessory = accessory)
         return { 'recall' : self.mock.recall, 'lowest_false' : self.mock.lowest_false, 'fpr' : self.mock.fpr }
