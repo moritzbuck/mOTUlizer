@@ -55,8 +55,10 @@ def main(args):
     assert all([os.path.exists(f) for f in faas.values()]), "one or some of your faas don't exists"
 
 
-    if len(faas) > 0:
+    if len(faas) > 0 and args.cog_file:
         genomes = set(faas.keys()).intersection(set(cog_dict.keys()))
+    elif len(faas) > 0:
+        genomes = set(faas.keys())
     else :
         genomes = set(cog_dict.keys())
     print("len cog dict" , len(cog_dict))
