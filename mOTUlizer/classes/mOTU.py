@@ -27,12 +27,12 @@ class mOTU:
             self.__from_bins(**kwargs)
 
 
-    def __for_mOTUpan(self, name, faas, cog_dict, checkm_dict, max_it = 20):
+    def __for_mOTUpan(self, name, faas, cog_dict, checkm_dict, threads = 4, precluster = False, max_it = 20, method = None):
         self.name = name
         self.faas = faas
         print("Creating mOTU for mOTUpan")
         if  not cog_dict :
-            tt = compute_COGs(self.faas, name = name + "COG")
+            tt = compute_COGs(self.faas, name = name + "COG", precluster = precluster, threads = threads)
             self.cog_dict = tt['genome2cogs']
             self.aa2cog = tt['aa2cog']
         else :
@@ -52,9 +52,11 @@ class mOTU:
             for cog in mag.cogs:
                     self.cogCounts[cog] += 1
 
-        self.core = {cog for cog, counts in self.cogCounts.items() if (100*counts/len(self)) > mean(checkm_dict.values())}
+        self.method = method
+        if self.method :
+            self.likelies = self.__core_likelyhood(max_it = max_it)
 
-        self.likelies = self.__core_likelyhood(max_it = max_it)
+        self.core = {cog for cog, counts in self.cogCounts.items() if (100*counts/len(self)) > mean(checkm_dict.values())}
 
     def __getitem__(self, i):
         return self.members[i]
@@ -73,7 +75,7 @@ class mOTU:
                 for k in addeds :
                     accessory[k] += 1
 
-            self.mock = MockmOTU(self.name + "_mock", len(self.core), len(self), lambda g : completnesses[g], accessory = accessory)
+            self.mock = MockmOTU(self.name + "_mock", len(self.core), len(self), lambda g : completnesses[g], accessory = accessory, method = self.method)
         return { 'recall' : self.mock.recall, 'lowest_false' : self.mock.lowest_false, 'fpr' : self.mock.fpr }
 
 

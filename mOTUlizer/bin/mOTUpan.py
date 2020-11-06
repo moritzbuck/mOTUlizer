@@ -61,7 +61,6 @@ def main(args):
         genomes = set(faas.keys())
     else :
         genomes = set(cog_dict.keys())
-    print("len cog dict" , len(cog_dict))
 
     if cog_dict and len(faas) > 0:
         if len(genomes) != len(faas) or len(faas) != len(cog_dict):
@@ -89,7 +88,9 @@ def main(args):
             checkm[f] = uniform(50,80)
     if args.length_seed :
         checkm = "length_seed"
-
+    threads = args.threads
+    precluster = args.precluster
+    method = None if args.genome2cog_only else "default"
 
     name = args.name if args.name else random_name()
     max_it = args.max_iter
@@ -98,18 +99,19 @@ def main(args):
 
     print(len(genomes), " genomes in your clade")
 
-    motu = mOTU( name = name , faas = faas , cog_dict = cog_dict, checkm_dict = checkm, max_it = max_it)
-    stats = motu.get_stats()
-    stats[name].update(motu.roc_values())
+    motu = mOTU( name = name , faas = faas , cog_dict = cog_dict, checkm_dict = checkm, max_it = max_it, threads = threads, precluster = precluster, method = method)
 
     if args.output:
         out_handle = open(out_json, "w")
     else :
         out_file = sys.stdout
     if not args.genome2cog_only:
+        stats = motu.get_stats()
+        
+        stats[name].update(motu.roc_values())
         json.dump(stats, out_handle, indent=4, sort_keys=True)
     else :
-        json.dump({k : list(v) for k,v in motu.cog_dict.items()}, out_handle)
+        json.dump({k : list(v) for k,v in motu.cog_dict.items()}, out_handle, indent=4, sort_keys=True)
     if args.output:
         out_handle.close()
 
@@ -124,11 +126,13 @@ if __name__ == "__main__":
     parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction [0-100]")
     parser.add_argument('--random_seed', '--rs', action='store_true', help = "random seed completeness between 5 and 95 percent")
     parser.add_argument('--genome2cog_only', action='store_true', help = "returns genome2cog only")
+    parser.add_argument('--precluster', action='store_true', default = False, help = "precluster proteoms with cd-hit")
     parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot, or a text file with paths to the faas (with the --txt switch)")
-    parser.add_argument('--txt', '-t', action='store_true', help = "the '--faas' switch indicates a file with paths")
+    parser.add_argument('--txt', action='store_true', help = "the '--faas' switch indicates a file with paths")
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
     parser.add_argument('--name', '-n', nargs = '?', help = "if you want to name this bag of bins")
     parser.add_argument('--max_iter', '-m', nargs = '?', type = int , default = 20 , help = "if you want to name this bag of bins")
+    parser.add_argument('--threads', '-t', nargs = '?', type = int , default = 24 , help = "number of threads")
     parser.add_argument('--version','-v', action="store_true", help = "get version")
 
     args = parser.parse_args()
