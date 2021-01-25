@@ -10,7 +10,7 @@ class MockmOTU(mOTU):
     def __repr__(self) :
         return "< MockmOTU with {n} genomes, of average {c}% completness, with core/genome_len of {r} >".format(c = 100*self.mean_completeness, n = len(self), r = self.ratio)
 
-    def __init__(self, name, core_len, nb_genomes, completeness, max_it = 20, accessory = None):
+    def __init__(self, name, core_len, nb_genomes, completeness, max_it = 20, accessory = None, method = None):
 
         core = {"CoreTrait_{}".format(i) for i in range(core_len)}
 
@@ -51,7 +51,7 @@ class MockmOTU(mOTU):
         self.real_core_len = core_len
 
         zerifneg = lambda g: 0.001 if g < 0 else g
-        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = { k : zerifneg(normal(v, 10)) for k,v in self.completenesses.items()}, max_it = max_it)
+        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = { k : zerifneg(normal(v, 10)) for k,v in self.completenesses.items()}, max_it = max_it, method = method)
         if core_len == 0:
             self.recall = "NA"
             self.fpr = "NA"

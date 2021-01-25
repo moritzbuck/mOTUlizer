@@ -35,6 +35,7 @@ def main(args):
                 with open(args.cog_file) as handle:
                     cog_dict = {l.split("\t")[0] : l[:-1].split("\t")[1:] for l in handle}
             cog_dict = {k : set(v) for k,v in cog_dict.items()}
+            assert len(cog_dict) > 0
         except :
             print("Either the cog_file does not exists or it is not formated well")
 
@@ -104,10 +105,10 @@ def main(args):
     if args.output:
         out_handle = open(out_json, "w")
     else :
-        out_file = sys.stdout
+        out_handle = sys.stdout
     if not args.genome2cog_only:
         stats = motu.get_stats()
-        
+
         stats[name].update(motu.roc_values())
         json.dump(stats, out_handle, indent=4, sort_keys=True)
     else :

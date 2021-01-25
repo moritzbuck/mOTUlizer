@@ -85,5 +85,7 @@ def compute_COGs(faas, name = "silixCOGs", precluster = False, threads = 4):
     os.remove(temp_file)
     os.remove(temp_out)
     os.remove(temp_clust)
+    for k,v in genome2cog.items():
+        genome2cog[k] = set(v)
 
     return { 'genome2cogs' : genome2cog, 'aa2cog' : recs}

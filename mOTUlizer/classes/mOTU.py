@@ -52,11 +52,12 @@ class mOTU:
             for cog in mag.cogs:
                     self.cogCounts[cog] += 1
 
+        self.core = {cog for cog, counts in self.cogCounts.items() if (100*counts/len(self)) > mean(checkm_dict.values())}
+
         self.method = method
         if self.method :
             self.likelies = self.__core_likelyhood(max_it = max_it)
 
-        self.core = {cog for cog, counts in self.cogCounts.items() if (100*counts/len(self)) > mean(checkm_dict.values())}
 
     def __getitem__(self, i):
         return self.members[i]
@@ -182,7 +183,7 @@ class mOTU:
             if self.core == old_core:
                break
             else :
-                core_len =new_core_len
+                core_len = new_core_len
 
         json.dump({ self.name : {"nb_mags" : len(self), "core_len" : core_len, "mean_starting_completeness" :  mean([b.checkm_complet for b in self]), "mean_new_completness" : mean([b.new_completness for b in self]), "LHR"  :  sum([l if l > 0 else -l for l in likelies.values()]), "mean_est_binsize" : mean([100*len(b.cogs)/b.new_completness for b in self])}}, sys.stderr )
         print(file = sys.stderr)
