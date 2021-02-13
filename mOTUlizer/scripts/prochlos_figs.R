@@ -3,7 +3,7 @@ library(pheatmap)
 library(RColorBrewer)
 library('philentropy')
 library(ggplot2)
-
+library(ggrepel)
 
 dd = fread("analyses/motupan_species_rarefact_w_ppanggolin_cogs.tsv")
 dd[, tool := "mOTUpan"]
@@ -117,3 +117,16 @@ pheatmap(ppangg, annotation_row=ppangg_cogs, annotation_col=ppangg_genomes, colo
          CellType = c(CT1 = "#1B9E77", CT2 = "#D95F02"),
          GeneClass = c(Path1 = "#7570B3", Path2 = "#E7298A", Path3 = "#66A61E")
      )
+
+ppangg_species_cores = as.data.table(read.csv("analyses/ppanggolin_species_stats.csv"))
+ppangg_species_cores[, diff := motupan/ppanggolin]
+ppangg_species_cores[,clade := sapply(strsplit(species,";"), "[", 7)]
+ggplot(ppangg_species_cores[type == "full"], aes(x=ppanggolin,y=motupan, size = nb_genomes, label=clade, col = mean_scaff_count))+
+  geom_abline(slope=1, intercept=0)+geom_point()+
+  geom_text_repel(data = ppangg_species_cores[abs(1-diff) >0.1 & type == "full"], size=4,box.padding = 3, max.overlaps = Inf)+theme_minimal()+
+    xlab("COGs in core (PPanGGOLiN)")+ylab("COGs in core (mOTUpan)")
+ggplot(ppangg_species_cores[type == "full"], aes(col=mean_completeness,y=diff, size = nb_genomes, x = intersect/mean_scaff_count))+geom_point()
+
+ggsave("~/temp/motupan_vs_ppanggolin_s__prochlo.svg", width = 12, height = 8)
+ggsave("~/temp/motupan_vs_ppanggolin_s__prochlo.pdf", width = 12, height = 8)
+ggsave("~/temp/ppang_cogs_species.jpg", width = 9, height = 8)

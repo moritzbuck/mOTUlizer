@@ -19,56 +19,190 @@ import hdf5plugin
 import pandas
 import shutil
 from subprocess import call
+from numpy import mean, median
 
 folder = "/home/moritz/projects/0039_mOTUlizer/test_data/prochlos/"
 os.chdir(folder)
+stratfresh = pandas.read_csv("/home/moritz/data/data_submit/metadata/Supplementary_Table_S5_-_Moderate_and_Highquality_MAGs.csv", index_col=0)
+counts_sfdb = {s : 0 for s in set(stratfresh.mOTU) if s}
+
+for s in stratfresh.mOTU:
+     counts_sfdb[s] += 1
+sfdb_ids = {s : [] for s,v in counts_sfdb.items() if v > 20}
+
+for k,v in stratfresh.mOTU.items():
+     if v in sfdb_ids:
+         sfdb_ids[v] += [k]
+
+
 r95 = pandas.read_csv("/home/moritz/data/gtdb/bac120_metadata_r95.tsv", sep ="\t", index_col=0)
-counts = {s : 0 for s in set(r95.loc[r95.scaffold_count < 4].gtdb_taxonomy)}
-for s in r95.loc[r95.scaffold_count < 4].gtdb_taxonomy:
+counts = {s : 0 for s in set(r95.gtdb_taxonomy)}
+for s in r95.gtdb_taxonomy:
      counts[s] += 1
 gids = {s : [] for s,v in counts.items() if v > 20}
 
-for k,v in r95.loc[r95.scaffold_count < 4].gtdb_taxonomy.items():
+for k,v in r95.gtdb_taxonomy.items():
      if v in gids:
          gids[v] += [k]
+
+
 
 def make_folder(gid, k):
     gid = gid[3:]
     pat = pjoin("/home/moritz/data/gtdb/root/{k}/{gid}/{gid}.fna.gz".format(k = k.replace(";","/"),gid = gid))
     return pat
 
-gids = {k: [l for l in ll if os.path.exists(make_folder(l, k))] for k, ll in gids.items() if sum([os.path.exists(make_folder(l, k)) for l in ll])  > 20}
+def make_folder2(gid, ass, path):
+    pat = pjoin("{path}/{ass}/{gid}.tar.gz".format(path = path, ass = ass,gid = gid))
+    return pat
 
-def process_species(liss, tax):
 
-    paths = [make_folder(g, tax) for g in liss]
-    paths = [g for g in paths if os.path.exists(g)]
-    os.makedirs("temp", exist_ok = True)
-    for p in paths:
-        shutil.copy(p, "temp/")
-    paths = [pjoin("temp", g) for g in os.listdir("temp") ]
-    for p in paths:
-        call("unpigz " + p , shell=True)
+gids = {k: [l for l in ll if os.path.exists(make_folder(l, k))] for k, ll in tqdm(gids.items()) if sum([os.path.exists(make_folder(l, k)) for l in ll])  > 20}
 
+split_gids = { k : {'goods' : [vv for vv in v if r95.loc[vv,"checkm_completeness"] > 90], 'bads' : [vv for vv in v if r95.loc[vv,"checkm_completeness"] < 90] }for k,v in gids.items()}
+split_gids = {k : v  for k,v in split_gids.items() if  (len(v['goods']) > 10) and len(v['bads']) > 10}
+ccs = {k : min([len(vv) for vv in v.values()])  for k,v in split_gids.items()}
+
+split_gids = {k : {'goods' : v['goods'][:ccs[k]], 'bads' : v['bads'][:ccs[k]]}   for k,v in split_gids.items()}
+
+def process_species(liss, tax, sett ="gtdb"):
+    if os.path.exists("temp/"):
+        shutil.rmtree("temp/")
+    if sett == "gtdb" :
+        paths = [make_folder(g, tax) for g in liss]
+        paths = [g for g in paths if os.path.exists(g)]
+        os.makedirs("temp", exist_ok = True)
+        for p in paths:
+            shutil.copy(p, "temp/")
+        paths = [pjoin("temp", g) for g in os.listdir("temp") ]
+        checkm_dict = { k : r95.loc[k, "checkm_completeness"]  for k in liss}
+    if sett == "stratfreshdb":
+        pat = "/home/moritz/data/data_submit/bins"
+        paths = [make_folder2(g, g.split("_")[0], pat) for g in liss]
+        os.makedirs("temp", exist_ok = True)
+        for gid, p in zip(liss,paths):
+            ass = gid.split("_")[0]
+            pp = p.split("data_submit/")[1]
+            pp =  pp.replace(ass + "/" , ass + "/" + gid + "/").replace(".tar.gz", ".fna.gz")
+            call("tar -C temp --strip-components=3 -vxzf  {tar} {pp} -C temp/  > /dev/null 2> /dev/null".format(tar = p, pp = pp), shell=True)
+        checkm_dict = { k : stratfresh.loc[k, "completeness"]  for k in liss}
+    for p in os.listdir("temp"):
+        call("unpigz temp/" + p , shell=True)
     with open("temp_gff.list", "w") as handle:
-        handle.writelines([os.path.basename(c)[:-7] + "\t" + c[:-3] + "\n" for c in paths])
+        handle.writelines([c[:-4] + "\t" + "temp/" + c + "\n" for c in os.listdir("temp")])
 
     call("""
-    ppanggolin annotate --fasta temp_gff.list  -o temp/ --basename temp --use_pseudo --tmpdir temp/ -c 20 -f
-    ppanggolin cluster -p temp/temp.h5 -c 20 --tmpdir temp
-    ppanggolin graph -p temp/temp.h5 -c 20
-    ppanggolin partition -K3 -f  -p temp/temp.h5 --cpu 20
+    ppanggolin workflow --fasta temp_gff.list  -o temp/ --basename temp --tmpdir temp/ -c 20 -f > /dev/null 2> /dev/null
+#    ppanggolin cluster -p temp/temp.h5 -c 20 --tmpdir temp > /dev/null 2> /dev/null
+#    ppanggolin graph -p temp/temp.h5 -c 20 > /dev/null 2> /dev/null
+#    ppanggolin partition -K3 -f  -p temp/temp.h5 --cpu 20 > /dev/null 2> /dev/null
 
-    python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin temp/temp.h5 > temp/ppanggolin.gid2cog
+    python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin temp/temp.h5 > temp/ppanggolin.gid2cog 2> /dev/null
     """, shell = True)
-    call("""
-    roary -p 22 -o other_soft/roary/s__Prochlorococcus_A_clusters.txt  -cd 1 -v `cat nucleotides/gff_list  | cut -f2`
-    cp accessory* blast_identity_frequency.Rtab  core_accessory* gene_presence_absence.* number_of_* summary_statistics.txt other_soft/roary/s__Prochlorococcus_A
-    python ../../mOTUlizer/bin/mOTUconvert.py --in_type roary other_soft/roary/s__Prochlorococcus_A_clusters.txt > static_data/roary_s__Prochlorococcus_A.gid2cog
 
-    """,
-    shell = True)
+    with open("temp/ppanggolin.gid2cog") as handle:
+        ppan_cogs = { k : set(v) for k,v in json.load(handle).items()}
+    motu = mOTU( name =  "temp" , faas = ppan_cogs, cog_dict = ppan_cogs, checkm_dict = checkm_dict, max_it = 20, threads = 20, precluster = False, method = "default")
+    ppan_motupan_core = motu.core
+    handle = h5py.File("temp/temp.h5", "r")
+    gene2ppangg = {a.decode() : b.decode() for a,b in  handle['geneFamilies']}
+    ppang2gene = {s : [] for s in set(gene2ppangg.values())}
+    for a,b in gene2ppangg.items():
+        ppang2gene[b] += [a]
+
+#    presabs = pandas.DataFrame().from_dict({k : {vv : 1.0 for vv in v} for k,v in  ppan_cogs.items()}, orient="index").fillna(0)
+#    ppangg2genome2gene = {k : {genome : [zz for zz in v if zz.startswith(genome)] for genome in set([vv.split("_CDS")[0] for vv in v])}  for k,v in ppang2gene.items()}
+    ppan_ppanggolin_core = {a[0].decode() for a in tqdm(handle['geneFamiliesInfo']) if a[1].decode() == "P"}
+#    core_mat = pandas.DataFrame.from_dict({g : { 'motupan_core' : 1 if g in ppan_motupan_core else 0, 'ppangolin_persistent' : 1 if g in ppan_ppanggolin_core else 0} for g in presabs.index}, orient = "index")
+
+#    call("""
+#    roary -p 22 -o other_soft/roary/s__Prochlorococcus_A_clusters.txt  -cd 1 -v `cat nucleotides/gff_list  | cut -f2`
+#    cp accessory* blast_identity_frequency.Rtab  core_accessory* gene_presence_absence.* number_of_* summary_statistics.txt other_soft/roary/s__Prochlorococcus_A
+#    python ../../mOTUlizer/bin/mOTUconvert.py --in_type roary other_soft/roary/s__Prochlorococcus_A_clusters.txt > static_data/roary_s__Prochlorococcus_A.gid2cog
+#
+#    """,
+#    shell = True)
     shutil.rmtree("temp/")
+    return {'motupan' : ppan_motupan_core, 'ppanggolin' : ppan_ppanggolin_core, 'new_completeness' : [g.new_completness for g in motu]}
+
+
+def process_species_cores():
+    cores = {}
+    cores_goods = {}
+    cores_bads = {}
+
+    cores_stats = {}
+
+    for k,v in tqdm([(k,v) for k,v in sfdb_ids.items() if k == k and len(v) < 2000 and k not in cores]):
+        print(k)
+        cores[k] = process_species(v,k, "stratfreshdb")
+
+    for k,v in tqdm([(k,v) for k,v in gids.items() if len(v) < 2000 and k not in cores]):
+        print(k)
+        cores[k] = process_species(v,k)
+
+    for k,v in tqdm(split_gids.items()):
+        print(k)
+        cores_goods[k] = process_species(v['goods'],k)
+        cores_bads[k] = process_species(v['bads'],k)
+
+    core_stats = {k :  {
+            'taxo' : k,
+            'motupan' : len(v['motupan']),
+            'ppanggolin' : len(v['ppanggolin']),
+            'intersect' : len(v['motupan'].intersection(v['ppanggolin'])),
+            'nb_genomes' : len(gids[k]),
+            'mean_completeness' : mean(v['new_completeness']),
+            'mean_scaff_count' : mean(list(r95.loc[gids[k]].scaffold_count)),
+            'mean_scaff_count' : mean(list(r95.loc[gids[k]].scaffold_count)),
+            'mean_n50_fract' : mean(r95.loc[gids[k]].n50_scaffolds/r95.loc[gids[k]].genome_size),
+            'type' : "full"
+            } for k,v in cores.items()
+        }
+    core_stats.update({k + "_goods" :  {
+            'taxo' : k,
+            'motupan' : len(v['motupan']),
+            'ppanggolin' : len(v['ppanggolin']),
+            'intersect' : len(v['motupan'].intersection(v['ppanggolin'])),
+            'nb_genomes' : len(split_gids[k]['goods']),
+            'mean_completeness' : mean(v['new_completeness']),
+            'mean_scaff_count' : mean(list(r95.loc[split_gids[k]['goods']].scaffold_count)),
+            'mean_scaff_count' : mean(list(r95.loc[split_gids[k]['goods']].scaffold_count)),
+            'mean_n50_fract' : mean(r95.loc[split_gids[k]['goods']].n50_scaffolds/r95.loc[split_gids[k]['goods']].genome_size),
+            'type' : "goods"
+            } for k,v in cores_goods.items()
+        })
+    core_stats.update({k + "_bads" :  {
+            'taxo' : k,
+            'motupan' : len(v['motupan']),
+            'ppanggolin' : len(v['ppanggolin']),
+            'intersect' : len(v['motupan'].intersection(v['ppanggolin'])),
+            'nb_genomes' : len(split_gids[k]['bads']),
+            'mean_completeness' : mean(v['new_completeness']),
+            'mean_scaff_count' : mean(list(r95.loc[split_gids[k]['bads']].scaffold_count)),
+            'mean_scaff_count' : mean(list(r95.loc[split_gids[k]['bads']].scaffold_count)),
+            'mean_n50_fract' : mean(r95.loc[split_gids[k]['bads']].n50_scaffolds/r95.loc[split_gids[k]['bads']].genome_size),
+            'type' : "bads"
+            } for k,v in cores_bads.items()
+        })
+
+    pandas.DataFrame.from_dict(core_stats, orient = "index").to_csv("analyses/ppanggolin_species_stats.csv", index_label = "species")
+
+    paired_out = ["taxo,core_of_goods,core_of_moderate,tool,nb_genomes\n"] + ["{tax},{good_core},{bad_core},{tool},{nb}\n".format(
+        tax=k,
+        good_core = core_stats[k + "_goods"]['motupan'],
+        bad_core = core_stats[k + "_bads"]['motupan'],
+        tool = "mOTUpan",
+        nb = core_stats[k + "_bads"]['nb_genomes'])
+    for k in split_gids]+["{tax},{good_core},{bad_core},{tool},{nb}\n".format(
+     tax=k,
+     good_core = core_stats[k + "_goods"]['ppanggolin'],
+     bad_core = core_stats[k + "_bads"]['ppanggolin'],
+     tool = "PPanGGOLiN",
+     nb = core_stats[k + "_bads"]['nb_genomes'])
+    for k in split_gids]
+    with open("analyses/ppanggolin_paired_stats.csv", "w") as handle:
+        handle.writelines(paired_out)
 
 
 def setup_data():
@@ -248,7 +382,10 @@ def get_genome_stats(g):
 genome2stats = {g: get_genome_stats(g) for g in tqdm(genome2motu)}
 
 def run_motupan(genomes, gid2cog, name = "test" , k=15):
-    kks = choices(genomes, k = k)
+    if k and k < len(genomes):
+        kks = choices(genomes, k = k)
+    else :
+        kks = genomes
     k_dups = {k : 0 for k in set(kks) if kks.count(k) >1}
     for i,g in enumerate(kks):
         if g in k_dups:
