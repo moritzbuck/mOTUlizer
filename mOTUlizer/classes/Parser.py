@@ -3,7 +3,7 @@ from tqdm import tqdm
 import sys
 import h5py
 import hdf5plugin
-            
+
 class Parser(metaclass=abc.ABCMeta):
 
     def __init__(self, **kwargs):
@@ -127,6 +127,27 @@ class RoaryParse(Parser):
         print("Parse the cluster-file", file = sys.stderr)
         with open(infile[0], "r") as handle:
             gene_id2family = {ll : l.split(':')[0] for l in tqdm(handle) for ll in l.split(":")[1].strip().split()}
+
+        print("Stratify it to genome", file = sys.stderr)
+        if not self.gene_id2genome:
+            self.gene_id2genome = {k : "_".join(k.split("_")[:-1]) for k in gene_id2family.keys()}
+
+        genome2family = {k : [] for k in set(self.gene_id2genome.values())}
+        for k,v in gene_id2family.items():
+            genome2family[self.gene_id2genome[k]] += [v]
+        if count:
+            return {k : {vv : v.count(vv) for vv in set(v)} for k,v in genome2family.items()}
+        else :
+            return {k : list(set(v)) for k,v in genome2family.items()}
+
+class MmseqsParse(Parser):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def convert(self, infile, count = False):
+        print("Parse the cluster-file", file = sys.stderr)
+        with open(infile[0], "r") as handle:
+            gene_id2family = {l.strip().split('\t')[1] : l.strip().split('\t')[0] for l in tqdm(handle)}
 
         print("Stratify it to genome", file = sys.stderr)
         if not self.gene_id2genome:

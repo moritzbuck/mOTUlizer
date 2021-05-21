@@ -39,7 +39,7 @@ class MetaBin:
         return 100*len(self.cogs)/self.new_completness
 
     @classmethod
-    def get_anis(cls, bins, outfile = None, method = "fastANI", block_size = 200, threads=1):
+    def get_anis(cls, bins, outfile = None, method = "fastANI", block_size = 2500, threads=1):
 
         if method == "fastANI":
             fastani_file = tempfile.NamedTemporaryFile().name if outfile is None else outfile
@@ -59,6 +59,7 @@ class MetaBin:
 
                 with open(b1_tfile, "w") as handle:
                     handle.writelines([l +"\n" for l in bloc1])
+
                 for j,bloc2 in enumerate(mag_blocks):
                         print("doing bloc {i} and {j}".format(i = i, j=j))
                         b2_tfile = tempfile.NamedTemporaryFile().name
@@ -74,12 +75,13 @@ class MetaBin:
 
                         os.remove(out_tfile)
                         os.remove(b2_tfile)
-                os.remove(b1_tfile)
-                with open(fastani_file) as handle:
-                    handle.readline()
-                    out_dists = {(l.split()[0], l.strip().split()[1]) : float(l.split()[2]) for l in handle}
-                if outfile is None:
-                    os.remove(fastani_file)
+
+            os.remove(b1_tfile)
+            with open(fastani_file) as handle:
+                handle.readline()
+                out_dists = {(l.split()[0], l.strip().split()[1]) : float(l.split()[2]) for l in handle}
+            if outfile is None:
+                os.remove(fastani_file)
         else :
             print("No other method for ani computation implemented yet")
             sys.exit()

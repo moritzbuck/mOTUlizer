@@ -26,6 +26,5 @@ def parse_checkm(file):
 
     assert len(lines) > 0, "there are no lines in the file, you sure the serparators are 'OK'"
 
-    lines = [{a : b if a in ['Marker lineage', 'Bin Id'] else float(b) for a,b in zip(header_line,l) }for l in lines]
-
+    lines = [{a : b if a not in ['Completeness', 'Contamination'] else float(b) for a,b in zip(header_line,l) }for l in lines]
     return {l['Bin Id'] : l for l in lines}

@@ -5,12 +5,12 @@ library('philentropy')
 library(ggplot2)
 library(ggrepel)
 
-dd = fread("analyses/motupan_species_rarefact_w_ppanggolin_cogs.tsv")
+dd = fread("analyses/motupan_species_rarefact_w_roary_cogs.tsv")
 dd[, tool := "mOTUpan"]
 dd = melt(dd, measure.vars = c('core_len','aux_len'), variable.name = "set", value.name = "nb_genes" )
 names(dd)[1] = 'nb_org'
-pp = fread("other_soft/ppanggolin/rarefaction_species/rarefaction.csv")
-pp[, tool := "ppanggolin"]
+pp = fread("other_soft/roary/rarefaction_species/rarefaction.csv")
+pp[, tool := "roary"]
 pp[,'persistent+shell' := persistent+shell]
 
 pp = melt(pp, measure.vars = c('cloud','persistent','persistent+shell' ,"shell"), variable.name = "set", value.name = "nb_genes" )
@@ -22,16 +22,16 @@ species_rar = rbind(pp[,..cols],dd[,..cols])
 
 plot_dat = species_rar[sample(nrow(species_rar))][!set %in% c('aux_len','cloud') ]
 plot_dat[, set := factor(set, levels = c('core_len', 'persistent', 'shell', 'persistent+shell'))]
-levels(plot_dat$set) = c("mOTUpan core", "PPanGGOLiN persistents", "PPanGGOLiN shell",   "persistent+shell")
+levels(plot_dat$set) = c("mOTUpan core", "roary persistents", "roary shell",   "persistent+shell")
 ggplot(plot_dat[set != 'persistent+shell'], aes(x=nb_org, y=nb_genes, by=set))+
   geom_point(alpha =0.1, col = "grey")+geom_smooth(se=FALSE, col='red')+
   facet_grid(~set)+theme_minimal()+xlab("number of genomes")+ylab("number of COGs in set")+
   theme(text = element_text(size = 20), panel.spacing = unit(2, "lines"))
 
 
-ggsave("~/temp/motupan_vs_ppanggolin_s__prochlo.svg", width = 12, height = 8)
-ggsave("~/temp/motupan_vs_ppanggolin_s__prochlo.pdf", width = 12, height = 8)
-ggsave("~/temp/motupan_vs_ppanggolin_s__prochlo.jpg", width = 12, height = 8)
+ggsave("~/temp/motupan_vs_roary_s__prochlo.svg", width = 12, height = 8)
+ggsave("~/temp/motupan_vs_roary_s__prochlo.pdf", width = 12, height = 8)
+ggsave("~/temp/motupan_vs_roary_s__prochlo.jpg", width = 12, height = 8)
 
 
 
@@ -45,32 +45,32 @@ melted_roary_rar = melt(roary_rar, measure.vars = c('core+softcore','shell','clo
 ggplot(melted_roary_rar[grep("cloud", set, inv= TRUE)], aes(x=nb_org, y=nb_genes, col=set))+geom_point()+geom_hline(yintercept=1875.4772727272727)+geom_smooth(se=FALSE)
 
 
-ppangg_rar = fread("analyses/ppanggolin_rarefaction.csv")
-ppangg_rar[,'core+softcore' := core+softcore]
-melted_ppangg_rar = melt(ppangg_rar, measure.vars = c('core+softcore','shell','cloud', 'motupan_core', 'motupan_cloud'), variable.name = "set", value.name = "nb_genes" )
-ggplot(melted_ppangg_rar[grep("cloud", set, inv= TRUE)], aes(x=nb_org, y=nb_genes, col=set))+geom_point()+geom_hline(yintercept=1861.9772727272727)+geom_smooth(se=FALSE)
+roary_rar = fread("analyses/roary_rarefaction.csv")
+roary_rar[,'core+softcore' := core+softcore]
+melted_roary_rar = melt(roary_rar, measure.vars = c('core+softcore','shell','cloud', 'motupan_core', 'motupan_cloud'), variable.name = "set", value.name = "nb_genes" )
+ggplot(melted_roary_rar[grep("cloud", set, inv= TRUE)], aes(x=nb_org, y=nb_genes, col=set))+geom_point()+geom_hline(yintercept=1861.9772727272727)+geom_smooth(se=FALSE)
 
 
 
 
 
-ppangg = read.csv("analyses/ppanggolin_matrix_species.csv", row.names=1)
-ppangg_cogs = read.csv("analyses/ppanggolin_matrix_species_cogs.csv", row.names=1)
-#row_dist = distance(ppangg, method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
-#col_dist = distance(t(ppangg), method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
-ppangg_genomes = read.csv("analyses/ppanggolin_matrix_species_genomes.csv", row.names=1)
+roary = read.csv("analyses/roary_matrix_species.csv", row.names=1)
+roary_cogs = read.csv("analyses/roary_matrix_species_cogs.csv", row.names=1)
+#row_dist = distance(roary, method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
+#col_dist = distance(t(roary), method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
+roary_genomes = read.csv("analyses/roary_matrix_species_genomes.csv", row.names=1)
 cols = colorRampPalette(brewer.pal(n = 7, name = "Greys"))(100)
-row.names(ppangg_genomes) = gsub("-",".",row.names(ppangg_genomes))
-selects = names(which(rowSums(ppangg) > 1))
+row.names(roary_genomes) = gsub("-",".",row.names(roary_genomes))
+selects = names(which(rowSums(roary) > 1))
 
-ppangg =  ppangg[selects, ]
-ppangg_cogs = ppangg_cogs[selects,]
+roary =  roary[selects, ]
+roary_cogs = roary_cogs[selects,]
 
-core_md = ppangg_cogs[ppangg_cogs$motupan == "core",]
-access_md = ppangg_cogs[ppangg_cogs$motupan != "core",]
+core_md = roary_cogs[roary_cogs$motupan == "core",]
+access_md = roary_cogs[roary_cogs$motupan != "core",]
 
-core = ppangg[row.names(core_md),]
-access = ppangg[row.names(access_md),]
+core = roary[row.names(core_md),]
+access = roary[row.names(access_md),]
 
 row_dist = distance(access, method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
 col_dist = distance(t(access), method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
@@ -96,21 +96,21 @@ big_heat[, genome  := factor(genome, levels = colnames(access)[hclust(col_dist, 
 ggplot(big_heat, aes(x=genome,y=cog, fill=presence==1))+geom_tile()+scale_fill_manual(values=c("white", "black"))+facet_grid(vars(set), scale="free", space = "free")+theme_minimal()+
   theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(),axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
 
-pheatmap(ppangg, annotation_row=ppangg_cogs, annotation_col=ppangg_genomes, color=cols, show_rownames = FALSE, show_colnames=FALSE, clustering_distance_rows=row_dist, clustering_distance_cols=col_dist, treeheight_row = 0, treeheight_col= 0)
+pheatmap(roary, annotation_row=roary_cogs, annotation_col=roary_genomes, color=cols, show_rownames = FALSE, show_colnames=FALSE, clustering_distance_rows=row_dist, clustering_distance_cols=col_dist, treeheight_row = 0, treeheight_col= 0)
 
 
 
 
-ppangg = read.csv("analyses/ppanggolin_matrix_goods.csv", row.names=1)
-ppangg_cogs = read.csv("analyses/ppanggolin_matrix_species_cogs.csv", row.names=1)
-row_dist = distance(ppangg, method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
-col_dist = distance(t(ppangg), method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
+roary = read.csv("analyses/roary_matrix_goods.csv", row.names=1)
+roary_cogs = read.csv("analyses/roary_matrix_species_cogs.csv", row.names=1)
+row_dist = distance(roary, method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
+col_dist = distance(t(roary), method = "jaccard",use.row.names = TRUE, as.dist.obj = TRUE)
 
-ppangg_genomes = read.csv("analyses/ppanggolin_matrix_genomes.csv", row.names=1)
+roary_genomes = read.csv("analyses/roary_matrix_genomes.csv", row.names=1)
 
 cols = colorRampPalette(brewer.pal(n = 7, name = "Greys"))(100)
 
-pheatmap(ppangg, annotation_row=ppangg_cogs, annotation_col=ppangg_genomes, color=cols, show_rownames = FALSE, clustering_distance_rows=row_dist, clustering_distance_cols=col_dist)
+pheatmap(roary, annotation_row=roary_cogs, annotation_col=roary_genomes, color=cols, show_rownames = FALSE, clustering_distance_rows=row_dist, clustering_distance_cols=col_dist)
 
      ann_colors = list(
          Time = c("white", "firebrick"),
@@ -118,15 +118,96 @@ pheatmap(ppangg, annotation_row=ppangg_cogs, annotation_col=ppangg_genomes, colo
          GeneClass = c(Path1 = "#7570B3", Path2 = "#E7298A", Path3 = "#66A61E")
      )
 
-ppangg_species_cores = as.data.table(read.csv("analyses/ppanggolin_species_stats.csv"))
-ppangg_species_cores[, diff := motupan/ppanggolin]
-ppangg_species_cores[,clade := sapply(strsplit(species,";"), "[", 7)]
-ggplot(ppangg_species_cores[type == "full"], aes(x=ppanggolin,y=motupan, size = nb_genomes, label=clade, col = mean_scaff_count))+
-  geom_abline(slope=1, intercept=0)+geom_point()+
-  geom_text_repel(data = ppangg_species_cores[abs(1-diff) >0.1 & type == "full"], size=4,box.padding = 3, max.overlaps = Inf)+theme_minimal()+
-    xlab("COGs in core (PPanGGOLiN)")+ylab("COGs in core (mOTUpan)")
-ggplot(ppangg_species_cores[type == "full"], aes(col=mean_completeness,y=diff, size = nb_genomes, x = intersect/mean_scaff_count))+geom_point()
+roary_species_cores = as.data.table(read.csv("analyses/roary_species_stats.csv", as.is =TRUE))
+roary_species_cores[, diff := (motupan-roary)/mean(c(motupan, roary) )]
+roary_species_cores[,clade := sapply(strsplit(taxo,";"), "[", 7)]
+ggplot(roary_species_cores[sample(nrow(roary_species_cores))], aes(x=roary,y=motupan, size = nb_genomes, label=clade, col = type))+
+  geom_abline(size=2, col="grey")+
+  theme_minimal()+scale_size_continuous(trans="log10")+
+  geom_point(alpha=0.5)+scale_color_brewer(palette="Dark2")+
+  xlab("COGs in roary's persistent set")+
+  ylab("COGs in mOTUpan's core set")
+ggsave("~/temp/morupan_vs_roary.pdf", width = 7, height = 6)
 
-ggsave("~/temp/motupan_vs_ppanggolin_s__prochlo.svg", width = 12, height = 8)
-ggsave("~/temp/motupan_vs_ppanggolin_s__prochlo.pdf", width = 12, height = 8)
-ggsave("~/temp/ppang_cogs_species.jpg", width = 9, height = 8)
+
+
+
+ggplot(roary_species_cores[sample(nrow(roary_species_cores))], aes(x=mean_completeness,y=diff, size = nb_genomes, label=clade, col = type))+
+  geom_hline(yintercept=0, size=2, col="grey")+
+  theme_minimal()+scale_size_continuous(trans="log10")+
+  geom_point(alpha=0.5)+scale_color_brewer(palette="Dark2")+
+  xlab("mean CheckM completeness")+
+  ylab("normalized residuals")
+ggsave("~/temp/normalized_residuals.pdf", width = 7, height = 6)
+
+meted = melt(roary_species_cores, measure.vars=c('motupan','roary'))
+ggplot(meted[sample(nrow(meted))], aes(x=mean_completeness, y=value/est_size, col=variable, size=nb_genomes))+
+  geom_line(mapping=aes(by=species), col="black", alpha=0.4, size=0.3)+scale_size_continuous(trans="log10")+
+  geom_point(mapping = aes(shape=type), alpha=0.5)+geom_smooth(alpha=0.2, size=3)+
+  theme_minimal()+
+  xlab('mean completeness')+ylab('core-COGs per Mb')#+ylim(0,1100)
+
+ggsave("~/temp/motupan_vs_roary_core_fract.pdf", width = 7, height = 6)
+
+
+
+
+
+roary_species_cores = as.data.table(read.csv("analyses/species_stats.csv", as.is =TRUE))
+#roary_species_cores = roary_species_cores[mean_completeness_roary > 80]
+
+roary_species_cores[, diff := (motupan_w_roary-roary_core)/mean(c(motupan_w_roary, roary_core) )]
+roary_species_cores[,clade := sapply(strsplit(taxo,";"), "[", 7)]
+ggplot(roary_species_cores[sample(nrow(roary_species_cores))], aes(x=roary_core,y=motupan_w_roary, size = nb_genomes, label=clade, col = type))+
+  geom_abline(size=2, col="grey")+
+  theme_minimal()+scale_size_continuous(trans="log10")+
+  geom_point(alpha=0.5)+scale_color_brewer(palette="Dark2")+
+  xlab("COGs in roary's core set")+
+  ylab("COGs in mOTUpan's core set")
+ggsave("~/temp/motupan_vs_roary.pdf", width = 7, height = 6)
+
+ggplot(roary_species_cores[sample(nrow(roary_species_cores))], aes(x=mean_completeness_roary,y=diff, size = nb_genomes, label=clade, col = type))+
+  geom_hline(yintercept=0, size=2, col="grey")+
+  theme_minimal()+scale_size_continuous(trans="log10")+
+  geom_point(alpha=0.5)+scale_color_brewer(palette="Dark2")+
+  xlab("mean CheckM completeness")+
+  ylab("normalized residuals")
+ggsave("~/temp/roary_normalized_residuals.pdf", width = 7, height = 6)
+
+meted = melt(roary_species_cores, measure.vars=c('motupan_w_roary','roary_core'))
+ggplot(meted[sample(nrow(meted))], aes(x=mean_completeness_roary, y=value/mean_est_roary_cogs, col=variable, size=nb_genomes))+
+  geom_line(mapping=aes(by=species), col="black", alpha=0.4, size=0.3)+scale_size_continuous(trans="log10")+
+  geom_point(mapping = aes(shape=type), alpha=0.5)+geom_smooth(alpha=0.2, size=3)+
+  theme_minimal()+
+  xlab('mean completeness')+ylab('Fraction of core COGs')#+ylim(0,1100)
+
+ggsave("~/temp/motupan_vs_roary_core_fract.pdf", width = 7, height = 6)
+roary_species_cores[,ppan_persist_p_shell := ppanggolin_persist + ppanggolin_shell]
+
+roary_species_cores[, diff := (motupan_w_ppan-ppanggolin_persist)/mean(c(motupan_w_ppan, ppanggolin_persist) )]
+ggplot(roary_species_cores[sample(nrow(roary_species_cores))], aes(x=ppanggolin_persist,y=motupan_w_ppan, size = nb_genomes, label=clade, col = type))+
+  geom_abline(size=2, col="grey")+
+  theme_minimal()+scale_size_continuous(trans="log10")+
+  geom_point(alpha=0.5)+scale_color_brewer(palette="Dark2")+
+  xlab("COGs in ppanggolin's persistent set")+
+  ylab("COGs in mOTUpan's core set")
+ggsave("~/temp/motupan_vs_ppan.pdf", width = 7, height = 6)
+
+ggplot(roary_species_cores[sample(nrow(roary_species_cores))], aes(x=mean_completeness_ppan,y=diff, size = nb_genomes, label=clade, col = type))+
+  geom_hline(yintercept=0, size=2, col="grey")+
+  theme_minimal()+scale_size_continuous(trans="log10")+
+  geom_point(alpha=0.5)+scale_color_brewer(palette="Dark2")+
+  xlab("mean CheckM completeness")+
+  ylab("normalized residuals")
+ggsave("~/temp/ppan_normalized_residuals.pdf", width = 7, height = 6)
+
+
+
+meted = melt(roary_species_cores, measure.vars=c('motupan_w_ppan','ppanggolin_persist'))
+ggplot(meted[sample(nrow(meted))], aes(x=mean_completeness_ppan, y=value/mean_est_roary_cogs, col=variable, size=nb_genomes))+
+  geom_line(mapping=aes(by=species), col="black", alpha=0.4, size=0.3)+scale_size_continuous(trans="log10")+
+  geom_point(mapping = aes(shape=type), alpha=0.5)+geom_smooth(alpha=0.2, size=3)+
+  theme_minimal()+
+  xlab('mean completeness')+ylab('Fraction of core COGs')#+ylim(0,1100)
+
+  ggsave("~/temp/motupan_vs_ppanggolin_core_fract.pdf", width = 7, height = 6)

@@ -32,7 +32,7 @@ If the columns are file names, the folders are removed (mainly so it can read fa
 """
 
 
-def main(args):
+def motulize(args):
     #parse and check your amino-acid files
 
     if args.txt and args.fnas:
@@ -115,7 +115,9 @@ def main(args):
 
     out_dict = {}
     for m in mOTUs:
-        out_dict.update(m.get_stats())
+        stats = m.get_stats()
+        stats[m.name]['representative'] = m.get_representative()
+        out_dict.update(stats)
 
     if args.output:
         out_handle = open(out_json, "w")
@@ -160,4 +162,4 @@ if __name__ == "__main__":
 
 #    print(args, file=sys.stderr)
 
-    main(args)
+    motulize(args)

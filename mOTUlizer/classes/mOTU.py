@@ -20,6 +20,7 @@ class mOTU:
         return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax =  None ) #self.consensus_tax()[0].split(";")[-1])
 
     def __init__(self, **kwargs):
+        self.likelies = None
         if "cog_dict" in kwargs:
             self.__for_mOTUpan(**kwargs)
 
@@ -30,9 +31,9 @@ class mOTU:
     def __for_mOTUpan(self, name, faas, cog_dict, checkm_dict, threads = 4, precluster = False, max_it = 20, method = None):
         self.name = name
         self.faas = faas
-        print("Creating mOTU for mOTUpan")
+        print("Creating mOTU for mOTUpan", file = sys.stderr)
         if  not cog_dict :
-            tt = compute_COGs(self.faas, name = name + "COG", precluster = precluster, threads = threads)
+            tt = compute_COGs(self.faas, name = name, precluster = precluster, threads = threads)
             self.cog_dict = tt['genome2cogs']
             self.aa2cog = tt['aa2cog']
         else :
@@ -134,6 +135,7 @@ class mOTU:
 
     def get_stats(self):
         out = {}
+
         out[self.name] = { "nb_genomes" : len(self),
         "core" : list(self.core) if self.core else None,
         "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core] if self.core else None ,
@@ -145,6 +147,31 @@ class mOTU:
         "likelies" : self.likelies
         }
         return out
+
+    def get_representative(self, method = "complex", max_redund = 5, min_complete = 95):
+            tt = [v.get_data() for v in self]
+            data = { t['name'] : t for t in tt}
+
+            data = {k : v for k,v in data.items() if v['checkm_contamin'] < max_redund}
+            if any([v['checkm_complet'] > min_complete for v in data.values()])  :
+                data = {k : v for k,v in data.items() if v['checkm_complet'] > min_complete}
+                best_redund = min(data.items(), key = lambda x : x[1]['checkm_contamin'])[1]['checkm_contamin']
+                return max( [ (k , v['checkm_contamin']) for k,v in data.items() if v['checkm_contamin'] == best_redund], key = lambda x: x[1])[0]
+            else :
+                return max( [ (k , v['checkm_contamin']) for k,v in data.items()], key = lambda x: x[1])[0]
+
+    # def get_representative(tt, max_redund = 5, min_complete = 95):
+    #         data = { t['name'] : t for t in tt}
+    #
+    #         data = {k : v for k,v in data.items() if v['checkm_contamin'] < max_redund}
+    #         if any([v['checkm_complet'] > min_complete for v in data.values()])  :
+    #             data = {k : v for k,v in data.items() if v['checkm_complet'] > min_complete}
+    #             best_redund = min(data.items(), key = lambda x : x[1]['checkm_contamin'])[1]['checkm_contamin']
+    #             return min( [ (k , v['checkm_contamin']) for k,v in data.items() if v['checkm_contamin'] == best_redund], key = lambda x: x[1])[0]
+    #         elif len(data) >0 :
+    #             return max( [ (k , v['checkm_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
+    #         else :
+    #             return None
 
     def get_mean_ani(self):
         dist_dict = self.fastani_matrix()
@@ -243,7 +270,7 @@ class mOTU:
     def cluster_MetaBins(cls , all_bins, dist_dict, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_contamin = 5, sub_complete = 0, sub_contamin = 100):
         import igraph
 
-        print("seeding bin-graph")
+        print("seeding bin-graph", file = sys.stderr )
 
         all_bins = {a.name : a for a in all_bins}
 
@@ -258,22 +285,22 @@ class mOTU:
         species_graph.add_vertices(len(vertexDeict))
         species_graph.add_edges([(vertexDeict[k[0]], vertexDeict[k[1]]) for k in good_pairs])
 
-        print("getting clusters")
+        print("getting clusters", file = sys.stderr)
 
         genome_clusters = [[rev_vertexDeict[cc] for cc in c ] for c in species_graph.components(mode=igraph.STRONG)]
 
         mean = lambda l : sum([len(ll) for ll in l])/len(l)
 
-        print("recruiting to graph of the", len(genome_clusters) ," mOTUs of mean length", mean(genome_clusters))
+        print("recruiting to graph of the", len(genome_clusters) ," mOTUs of mean length", mean(genome_clusters), file = sys.stderr)
 
 
         left_pairs = {k : v for k, v in dist_dict.items() if v > ani_cutoff and k[0] != k[1] and ((decent_sub(k[0]) and good_mag(k[1])) or (decent_sub(k[1]) and good_mag(k[0])))}
-        print("looking for good_left pairs")
+        print("looking for good_left pairs", file = sys.stderr)
 #        print(left_pairs)
 
         subs = {l : (None,0) for ll in left_pairs.keys() for l in ll if not good_mag(l)}
 #        print(subs)
-        print("looking for best mOTU match")
+        print("looking for best mOTU match", file = sys.stderr)
         for p,ani in left_pairs.items():
             if p[0] in subs and subs[p[0]][1] < ani:
                 subs[p[0]] = (p[1], ani)
@@ -282,7 +309,7 @@ class mOTU:
 
         genome_clusters = [set(gg) for gg in genome_clusters]
 
-        print("append to the", len(genome_clusters) ,"mOTUs of mean length", mean(genome_clusters))
+        print("append to the", len(genome_clusters) ,"mOTUs of mean length", mean(genome_clusters), file = sys.stderr)
         for k, v in subs.items():
             for g in genome_clusters:
                 if v[0] in g :
@@ -290,7 +317,7 @@ class mOTU:
 
         genome_clusters = [list(gg) for gg in genome_clusters]
 
-        print("processing the", len(genome_clusters) ,"mOTUs of mean length", mean(genome_clusters))
+        print("processing the", len(genome_clusters) ,"mOTUs of mean length", mean(genome_clusters), file = sys.stderr)
         #print(genome_clusters)
 
         zeros = len(str(len(genome_clusters)))

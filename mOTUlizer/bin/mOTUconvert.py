@@ -9,7 +9,7 @@ import json
 from mOTUlizer import __version__
 
 from mOTUlizer.utils import *
-from mOTUlizer.classes.Parser import EmapperParse, PPanGGolinParse, RoaryParse
+from mOTUlizer.classes.Parser import EmapperParse, PPanGGolinParse, RoaryParse, MmseqsParse
 
 description_text = """
 Converts output of diverse software generatig COGs, or genetically encoded traits into a genome2cog-JSON file useable by mOTUpan
@@ -25,8 +25,14 @@ ppanggolin :
 \textracts the gene families from the hdf5-file (e.g. '.h5' file in the output folder)
 
 roary :
-\tjust converts the cluster output file, clustered_proteins byt default, the file
+\tjust converts the cluster output file, clustered_proteins by default, the file
 \tof the '-o' switch, to a json file readable by mOTUpan
+
+mmseqs2 :
+\tjust converts the cluster output file, <o:cluster_Prefix>_cluster.tsv by default, generated
+\twhen running mmseq2 easy-cluster, where <o:cluster_Prefix> is the output prefix you give to
+\tthe command.
+
 
 """
 
@@ -39,6 +45,8 @@ def main(args):
         converter = PPanGGolinParse()
     elif method == "roary":
         converter = RoaryParse()
+    elif method == "mmseqs2":
+        converter = MmseqsParse()
     else :
         print("This is not implemented yet run with '--list' to see available options" )
         sys.exit(0)
@@ -58,9 +66,8 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "mOTUconverts.py", description=description_text, epilog = "Let's do this")
     parser.add_argument('--output', '-o', nargs = '?', help = "send output to this file defaults to stdout")
-    parser.add_argument('input', nargs = '*', metavar = "INPUT", help = "input file(s), check '--list' for specifics")
+    parser.add_argument('input', nargs = 1, metavar = "INPUT", help = "input file(s), check '--list' for specifics")
     parser.add_argument('--gene2genome', nargs='?', help = "if gene names not '${genome_name}_[0-9]*', a tab separated file with id of gene in the fist column and a semi-column separated second column containing genomes_id of genomes containing it")
-    parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot, or a text file with paths to the faas (with the --txt switch)")
     parser.add_argument('--in_type', '-I', nargs = '?', default = "emapper" , help = "software generating the input")
     parser.add_argument('--version','-v', action="store_true", help = "get version and exit")
     parser.add_argument('--list','-l', action="store_true", help = "list tools available and exit")
