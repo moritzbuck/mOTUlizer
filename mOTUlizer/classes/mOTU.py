@@ -20,7 +20,9 @@ class mOTU:
         return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax =  None ) #self.consensus_tax()[0].split(";")[-1])
 
     def __init__(self, **kwargs):
+        self.quiet = kwargs['quiet'] if "quiet" in kwargs else False
         self.likelies = None
+        self.mock = []
         if "cog_dict" in kwargs:
             self.__for_mOTUpan(**kwargs)
 
@@ -28,10 +30,11 @@ class mOTU:
             self.__from_bins(**kwargs)
 
 
-    def __for_mOTUpan(self, name, faas, cog_dict, checkm_dict, threads = 4, precluster = False, max_it = 20, method = None):
+    def __for_mOTUpan(self, name, faas, cog_dict, checkm_dict, threads = 4, precluster = False, max_it = 20, method = None, quiet=False):
         self.name = name
         self.faas = faas
-        print("Creating mOTU for mOTUpan", file = sys.stderr)
+        if not quiet:
+            print("Creating mOTU for mOTUpan", file = sys.stderr)
         if  not cog_dict :
             tt = compute_COGs(self.faas, name = name, precluster = precluster, threads = threads)
             self.cog_dict = tt['genome2cogs']
@@ -47,7 +50,6 @@ class mOTU:
                 checkm_dict[f] = 100*len(self.cog_dict[f])/max_len
 
         self.members = [MetaBin(bin_name, cogs = self.cog_dict[bin_name], faas = self.faas.get(bin_name), fnas = None, complet = checkm_dict.get(bin_name)) for bin_name in self.cog_dict.keys()]
-        self.mock = None
         self.cogCounts = {c : 0 for c in set.union(set([cog for mag in self.members for cog in mag.cogs]))}
         for mag in self.members:
             for cog in mag.cogs:
@@ -64,21 +66,38 @@ class mOTU:
         return self.members[i]
 
 
-    def roc_values(self):
-        from mOTUlizer.classes.MockData import MockmOTU
+    def roc_values(self, boots):
+        if boots > 0:
+            from mOTUlizer.classes.MockData import MockmOTU
+            mean = lambda data: float(sum(data)/len(data))
+            variance 	= lambda data, avg: sum([x**2 for x in [i-avg for i in data]])/float(len(data))
+            std_dev = lambda data: variance(data, mean(data))**0.5
 
-        if self.mock is None:
-            completnesses = {"Genome_{}".format(i) : c.new_completness for i,c in enumerate(self)}
+            while len(self.mock) < boots:
+                print("Running bootstrap {}/{}".format(len(self.mock)+1, boots), file = sys.stderr)
+                completnesses = {"Genome_{}".format(i) : c.new_completness for i,c in enumerate(self)}
 
-            accessory = sorted([v for k,v in self.cogCounts.items() if k not in self.core])
-            missing = int(sum(accessory)*(1-mean(list(completnesses.values()))/100))
-            if len(accessory) > 0:
-                addeds = choices(list(range(len(accessory))), weights = accessory, k = missing)
-                for k in addeds :
-                    accessory[k] += 1
+                accessory = sorted([v for k,v in self.cogCounts.items() if k not in self.core])
+                missing = int(sum(accessory)*(1-mean(list(completnesses.values()))/100))
+                if len(accessory) > 0:
+                    addeds = choices(list(range(len(accessory))), weights = accessory, k = missing)
+                    for k in addeds :
+                        accessory[k] += 1
 
-            self.mock = MockmOTU(self.name + "_mock", len(self.core), len(self), lambda g : completnesses[g], accessory = accessory, method = self.method)
-        return { 'recall' : self.mock.recall, 'lowest_false' : self.mock.lowest_false, 'fpr' : self.mock.fpr }
+                self.mock += [MockmOTU(self.name + "_mock", len(self.core), len(self), lambda g : completnesses[g], accessory = accessory, method = self.method)]
+            return { 'mean_recall' : mean([m.recall for m in self.mock]),
+                     'sd_recall' : std_dev([m.recall for m in self.mock]),
+                     'mean_fpr' : mean([m.fpr for m in self.mock]),
+                     'sd_fpr' : std_dev([m.fpr for m in self.mock]),
+                     'mean_lowest_false' : mean([m.lowest_false for m in self.mock]),
+                     'sd_lowest_false' : std_dev([m.lowest_false for m in self.mock])}
+        else:
+            return { 'mean_recall' : "NA",
+                     'sd_recall' : "NA",
+                     'mean_fpr' : "NA",
+                     'sd_fpr' : "NA",
+                     'mean_lowest_false' : "NA",
+                     'sd_lowest_false' : "NA"}
 
 
     def avg_cog_content(self):
@@ -186,7 +205,8 @@ class mOTU:
         self.core = set([c for c, v in likelies.items() if v > likeli_cutof])
         core_len = len(self.core)
         i = 1
-        print("iteration 1 : ", core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
+        if not self.quiet:
+            print("iteration 1 : ", core_len, "sum_abs_LLHR:" , sum([l if l > 0 else -l for l in likelies.values()]), file = sys.stderr)
         for mag in self:
             if len(self.core) > 0:
                 mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
@@ -206,14 +226,16 @@ class mOTU:
                     mag.new_completness = 0
                 mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
                 mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.01
-            print("iteration",i, ": ", new_core_len, "LHR:" , sum(likelies.values()), file = sys.stderr)
+            if not self.quiet:
+                print("iteration",i, ": ", new_core_len, "sum_abs_LLHR:" , sum([l if l > 0 else -l for l in likelies.values()]), file = sys.stderr)
             if self.core == old_core:
                break
             else :
                 core_len = new_core_len
 
-        json.dump({ self.name : {"nb_mags" : len(self), "core_len" : core_len, "mean_starting_completeness" :  mean([b.checkm_complet for b in self]), "mean_new_completness" : mean([b.new_completness for b in self]), "LHR"  :  sum([l if l > 0 else -l for l in likelies.values()]), "mean_est_binsize" : mean([100*len(b.cogs)/b.new_completness for b in self])}}, sys.stderr )
-        print(file = sys.stderr)
+        if not self.quiet:
+            json.dump({ self.name : {"nb_mags" : len(self), "core_len" : core_len, "mean_starting_completeness" :  mean([b.checkm_complet for b in self]), "mean_new_completness" : mean([b.new_completness for b in self]), "LHR"  :  sum([l if l > 0 else -l for l in likelies.values()]), "mean_est_binsize" : mean([100*len(b.cogs)/b.new_completness for b in self])}}, sys.stderr )
+            print(file = sys.stderr)
         self.iterations = i -1
         return likelies
 

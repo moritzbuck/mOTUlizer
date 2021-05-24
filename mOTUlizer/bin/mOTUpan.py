@@ -113,8 +113,10 @@ def motupan(args):
         out_handle = sys.stdout
     stats = motu.get_stats()
 
+    nb_boots = args.boots
     if args.long and not args.genome2cog_only:
-        stats[name].update(motu.roc_values())
+
+        stats[name].update(motu.roc_values(nb_boots=nb_boots))
         json.dump(stats, out_handle, indent=4, sort_keys=True)
     elif args.genome2cog_only :
         json.dump({k : list(v) for k,v in motu.cog_dict.items()}, out_handle, indent=4, sort_keys=True)
@@ -122,7 +124,7 @@ def motupan(args):
         out_dict = {}
 
         stats = list(stats.values())[0]
-        stats.update(motu.roc_values())
+        stats.update(motu.roc_values(nb_boots))
 
         for k in set(stats['cogs']['aa'].values()):
             out_dict[k] = {}
@@ -140,25 +142,43 @@ def motupan(args):
                 out_dict[vv]['genome_occurences'] += 1
 
         for k,v in out_dict.items():
+            v['mean_copy_per_genome'] = "NA" if not v['genes'] else len(v['genes'])/len(v['genomes'])
             v['genes'] = ";".join(v['genes'])
             v['genomes'] = ";".join(v['genomes'])
 
-        header = ['trait_name','type', 'genome_occurences', 'log_likelihood_to_be_core', 'genomes', 'genes']
+        header = ['trait_name','type', 'genome_occurences', 'log_likelihood_to_be_core', 'mean_copy_per_genome','genomes', 'genes']
         genome_line = ";".join(["{}:prior_complete={}:posterior_complete={}".format(k['name'], k['checkm_complet'], k['new_completness']) for k in stats['genomes']])
+        mean = lambda l : sum([ll for ll in l])/len(l)
+
         outformat ="""#mOTUlizer:mOTUpan:{version}
+#run_name={name}
+#
 #genome_count={nb}
+#core_length={core_len}
+#mean_prior_completeness={prior_complete:.2f}
+#mean_posterior_completeness={post_complete:.2f}
+#sum_abs_loglikelihood_ratios={SALLHR:.2f}
+#mean_est_genome_size={size:.2f};traits_per_genome
 #{genomes}
 #
-#MC_false_positive_rate={fpr}
-#MC_recall={recall}
-#MC_lowest_false_positive={lowest}
-#MC_nb_reps=1
+#bootstrapped_mean_false_positive_rate={fpr:.2f};bootstrapped_sd_false_positive_rate={sd_fpr:.2f}
+#bootstrapped_mean_recall={recall:.2f};bootstrapped_sd_recall={sd_recall:.2f}
+#bootstrapped_mean_lowest_false_positive={lowest:.2f};bootstrapped_sd_lowest_false_positive={sd_lowest:.2f}
+#bootstrapped_nb_reps={boots}
 {header}
 {data}
 """
         print(outformat.format(version = __version__ , nb = stats['nb_genomes'],
-            genomes=genome_line, fpr=stats['fpr'],
-            recall = stats['recall'], lowest = stats['lowest_false'],
+            name = motu.name,
+            core_len = len(motu.core),
+            prior_complete=mean([b.checkm_complet for b in motu]),
+            post_complete=mean([b.new_completness for b in motu]),
+            SALLHR=sum([l if l > 0 else -l for l in motu.likelies.values()]),
+            size=mean([100*len(b.cogs)/b.new_completness for b in motu]),
+            boots=nb_boots,
+            genomes=genome_line, fpr=stats['mean_fpr'],
+            recall = stats['mean_recall'], lowest = stats['mean_lowest_false'],sd_fpr=stats['sd_fpr'],
+            sd_recall = stats['sd_recall'], sd_lowest = stats['sd_lowest_false'],
             header = "\t".join(header), data = "\n".join(["\t".join([str(v[hh]) for hh in header]) for v in out_dict.values()])),
             file=out_handle)
 
@@ -182,6 +202,7 @@ if __name__ == "__main__":
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
     parser.add_argument('--name', '-n', nargs = None, help = "if you want to name this bag of bins")
     parser.add_argument('--long', action='store_true', help = "longform output, a JSON-file with a lot more information (might be cryptic...)")
+    parser.add_argument('--boots', '-b', nargs = None, type = int , default = 0 , help = "number of bootstraps for fpr and recall estimate (default 0), careful, slows down program linearly")
     parser.add_argument('--max_iter', '-m', nargs = None, type = int , default = 20 , help = "max number of iterations (set to one if you have only few traits, e.g. re-estimation of completeness is nonsensical)")
     parser.add_argument('--threads', '-t', nargs = None, type = int , default = multiprocessing.cpu_count(), help = "number of threads (default all, e.g. {}), only gene clustering is multithreaded right now, the rest is to come".format(multiprocessing.cpu_count()))
     parser.add_argument('--version','-v', action="store_true", help = "get version")

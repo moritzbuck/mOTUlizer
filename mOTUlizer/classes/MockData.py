@@ -51,7 +51,7 @@ class MockmOTU(mOTU):
         self.real_core_len = core_len
 
         zerifneg = lambda g: 0.001 if g < 0 else g
-        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = { k : zerifneg(normal(v, 10)) for k,v in self.completenesses.items()}, max_it = max_it, method = method)
+        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = { k : zerifneg(normal(v, 10)) for k,v in self.completenesses.items()}, max_it = max_it, method = method, quiet=True)
         if core_len == 0:
             self.recall = "NA"
             self.fpr = "NA"
