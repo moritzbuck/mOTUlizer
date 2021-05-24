@@ -43,6 +43,10 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
     if precluster:
         cdhit_file = tempfile.NamedTemporaryFile().name
 
+        if not shutil.which('cd-hit'):
+            print("You need cd-hit to run the preclustering, either install it or run mOTUpan without preclustering", file = sys.stderr)
+            sys.exit(-1)
+
         exec = "cd-hit -i {input} -o {output} -c 0.95 -M 0 -T {threads} -d 0 -s 0.95 >> {log} 2>&1".format(input = all_faas_file, output = cdhit_file, threads = threads, log = "/dev/null")
         print("Running cd-hit preclustering", file = sys.stderr)
         os.system(exec)
@@ -64,6 +68,9 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
         SeqIO.write(seqs, all_faas_file, "fasta")
 
     if method == "silixCOGs" :
+        if not shutil.which("diamond") or not shutil.which("silix"):
+            print("You need diamond and silix to run the silix gene-clustering, either install it or run mOTUpan with an other gene-clustering or your own traits", file = sys.stderr)
+            sys.exit(-1)
 
         print("all v all diamond for silix", file = sys.stderr)
 
@@ -95,6 +102,9 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
         covmode = 0
         cov = 0.80
         seqid = 0.80
+        if not shutil.which("mmseqs"):
+            print("You need mmseqs2 to run the silix gene-clustering, either install it or run mOTUpan with an other gene-clustering or your own traits", file = sys.stderr)
+            sys.exit(-1)
 
         print("running mmseqs easy-cluster with params --min-seq-id {seqid} --cov-mode {covmode} -c {cov} in {}".format(temp_folder, covmode = covmode, cov = cov, seqid=seqid), file = sys.stderr)
         mmseqs_dat = pjoin(temp_folder, "mmseqs_")

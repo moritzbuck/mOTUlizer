@@ -17,12 +17,12 @@ def parse_checkm(file):
     all_lines = [re.sub(r"  +","\t", a).split("\t") for a in all_lines]
 
     header_lines = [i for i,l in enumerate(all_lines) if 'Bin Id' in l and 'Completeness' in l and 'Contamination' in l]
-    assert len(header_lines) == 1, "your completness files is badly formed, it should be TAB-separated and needs a header line with 'Bin Id', 'Completeness', and 'Contamination' in it"
+    assert len(header_lines) >= 1, "your completness files is badly formed, it should be TAB-separated (multispaced...) and needs a header line with 'Bin Id', 'Completeness', and 'Contamination' in it"
 
     header_lines = header_lines[0]
     header_line = all_lines[header_lines]
 
-    lines = [l for i,l in enumerate(all_lines) if i != header_lines and len(l) == len(header_line)]
+    lines = [l for i,l in enumerate(all_lines) if i != header_lines and len(l) == len(header_line) and 'Completeness' not in l]
 
     assert len(lines) > 0, "there are no lines in the file, you sure the serparators are 'OK'"
 

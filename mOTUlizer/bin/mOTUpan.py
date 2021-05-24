@@ -99,6 +99,7 @@ def motupan(args):
     method = None if args.genome2cog_only else "default"
 
     name = args.name if args.name else random_name()
+    name = (name + "_") if not name.endswith("_") else name
     max_it = args.max_iter
     if faas is None and cogs is None:
         sys.exit("at least one of --faas and --cog_file is required")
@@ -116,7 +117,7 @@ def motupan(args):
     nb_boots = args.boots
     if args.long and not args.genome2cog_only:
 
-        stats[name].update(motu.roc_values(nb_boots=nb_boots))
+        stats[name].update(motu.roc_values(boots=nb_boots))
         json.dump(stats, out_handle, indent=4, sort_keys=True)
     elif args.genome2cog_only :
         json.dump({k : list(v) for k,v in motu.cog_dict.items()}, out_handle, indent=4, sort_keys=True)
@@ -124,7 +125,7 @@ def motupan(args):
         out_dict = {}
 
         stats = list(stats.values())[0]
-        stats.update(motu.roc_values(nb_boots))
+        stats.update(motu.roc_values(boots = nb_boots))
 
         for k in set(stats['cogs']['aa'].values()):
             out_dict[k] = {}
@@ -147,7 +148,7 @@ def motupan(args):
             v['genomes'] = ";".join(v['genomes'])
 
         header = ['trait_name','type', 'genome_occurences', 'log_likelihood_to_be_core', 'mean_copy_per_genome','genomes', 'genes']
-        genome_line = ";".join(["{}:prior_complete={}:posterior_complete={}".format(k['name'], k['checkm_complet'], k['new_completness']) for k in stats['genomes']])
+        genome_line = "genomes=" + ";".join(["{}:prior_complete={}:posterior_complete={}".format(k['name'], k['checkm_complet'], k['new_completness']) for k in stats['genomes']])
         mean = lambda l : sum([ll for ll in l])/len(l)
 
         outformat ="""#mOTUlizer:mOTUpan:{version}
@@ -165,11 +166,12 @@ def motupan(args):
 #bootstrapped_mean_recall={recall:.2f};bootstrapped_sd_recall={sd_recall:.2f}
 #bootstrapped_mean_lowest_false_positive={lowest:.2f};bootstrapped_sd_lowest_false_positive={sd_lowest:.2f}
 #bootstrapped_nb_reps={boots}
+#
 {header}
 {data}
 """
         print(outformat.format(version = __version__ , nb = stats['nb_genomes'],
-            name = motu.name,
+            name = motu.name.strip("_"),
             core_len = len(motu.core),
             prior_complete=mean([b.checkm_complet for b in motu]),
             post_complete=mean([b.new_completness for b in motu]),
@@ -191,12 +193,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "mOTUpan.py", description=description_text, epilog = "Let's do this")
     parser.add_argument('--output', '-o', nargs = None, help = "send output to this file")
     parser.add_argument('--force', '-f', action='store_true', help = "force execution answering default answers")
-    parser.add_argument('--checkm', '-k',nargs = None, help = "checkm file if you want to see completnesses with it")
+    parser.add_argument('--checkm', '-k',nargs = None, help = "checkm file if you want to seed completnesses with it, accepts concatenations of multiple checkm-files, check manual for more formating options")
     parser.add_argument('--seed', '-s', type = float , nargs = '?', help = "seed completeness, advice a number around 90 ({} default), this is the default completeness prior".format(__checkm_default__))
     parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction [0-100]")
     parser.add_argument('--random_seed', '--rs', action='store_true', help = "random seed completeness between 5 and 95 percent")
     parser.add_argument('--genome2cog_only', action='store_true', help = "returns genome2cog only")
-    parser.add_argument('--precluster', action='store_true', default = False, help = "precluster proteoms with cd-hit")
+    parser.add_argument('--precluster', action='store_true', default = False, help = "precluster proteoms with cd-hit, mainly for legacy reasons, mmseqs2 is faaaaaast")
     parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot, or a text file with paths to the faas (with the --txt switch)")
     parser.add_argument('--txt', action='store_true', help = "the '--faas' switch indicates a file with paths")
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
