@@ -8,10 +8,6 @@ import argparse
 import json
 from random import uniform
 import multiprocessing
-
-#print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
-sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
-
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
 from mOTUlizer.classes.MetaBin import MetaBin
@@ -131,26 +127,29 @@ def motulize(args):
         out_dict.update(stats)
 
     short_out = []
-    header = ['mOTU', 'representative', 'mean_ANI', 'min_ANI', 'missing_edges', 'genomes']
-    for k, v in out_dict.items:
+    header = ['mOTU', 'representative', 'mean_ANI', 'min_ANI', 'missing_edges', 'MAGs', 'SUBs']
+    for k, v in out_dict.items():
         row = {
         'mOTU' : k,
         'representative' : v['representative'],
-        'mean_ANI' : v['mean_ANI'],
-        'min_ANI' : min([vv[2] for vv in v['ANIs']])
-        'missing_edges' : v['missing_edges'],
-        'genomes' : ";".join([g['name'] for g in v['genomes']])
-        }
+        'mean_ANI' : v['mean_ANI']['mean_ANI'],
+        'min_ANI' : min([vv[2] for vv in v['ANIs']]),
+        'missing_edges' : v['mean_ANI']['missing_edges'],
+        'MAGs' : ";".join([g['name'] for g in v['genomes'] if g['checkm_complet'] > mag_complete and g['checkm_contamin'] < mag_contamin]),
+        'SUBs' : ";".join([g['name'] for g in v['genomes'] if g['checkm_complet'] <= mag_complete or g['checkm_contamin'] >= mag_contamin])
 
-    outformat =         outformat ="""#mOTUlizer:mOTUpan:{version}
+        }
+        short_out += [row]
+
+    genome_line = "genomes=" + ";".join(["{}:completeness={}:redundancy={}".format(k['name'], k['checkm_complet'], k['checkm_contamin']) for v in out_dict.values() for k in v['genomes'] ])
+
+    outformat ="""#mOTUlizer:mOTUlize:{version}
 #prefix={name}
 #
 #{genomes}
 #
-#
 {header}
-{data}
-"""
+{data}"""
 
 
     if args.output:
@@ -162,20 +161,12 @@ def motulize(args):
     if args.long:
         json.dump(out_dict, out_handle, indent=4, sort_keys=True)
     else :
-        print(outformat.format(version = __version__ , nb = stats['nb_genomes'],
-            name = motu.name.strip("_"),
-            core_len = len(motu.core),
-            prior_complete=mean([b.checkm_complet for b in motu]),
-            post_complete=mean([b.new_completness for b in motu]),
-            SALLHR=sum([l if l > 0 else -l for l in motu.likelies.values()]),
-            size=mean([100*len(b.cogs)/b.new_completness for b in motu]),
-            boots=nb_boots,
-            genomes=genome_line, fpr=stats['mean_fpr'],
-            recall = stats['mean_recall'], lowest = stats['mean_lowest_false'],sd_fpr=stats['sd_fpr'],
-            sd_recall = stats['sd_recall'], sd_lowest = stats['sd_lowest_false'],
-            header = "\t".join(header), data = "\n".join(["\t".join([str(v[hh]) for hh in header]) for v in out_dict.values()])),
+        print(outformat.format(version = __version__ ,
+            name = prefix,
+            genomes=genome_line,
+            header = "\t".join(header),
+            data = "\n".join(["\t".join([str(v[hh]) for hh in header]) for v in short_out])),
             file=out_handle)
-        out_handle.writelines(outformat.format())
     if args.output:
         out_handle.close()
 
