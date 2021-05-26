@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import shutil
@@ -151,6 +151,20 @@ def motupan(args):
         genome_line = "genomes=" + ";".join(["{}:prior_complete={}:posterior_complete={}".format(k['name'], k['checkm_complet'], k['new_completness']) for k in stats['genomes']])
         mean = lambda l : sum([ll for ll in l])/len(l)
 
+        if stats['mean_recall'] != "NA":
+            bootsy = """
+#bootstrapped_mean_false_positive_rate={fpr:.2f};bootstrapped_sd_false_positive_rate={sd_fpr:.2f}
+#bootstrapped_mean_recall={recall:.2f};bootstrapped_sd_recall={sd_recall:.2f}
+#bootstrapped_mean_lowest_false_positive={lowest:.2f};bootstrapped_sd_lowest_false_positive={sd_lowest:.2f}
+#bootstrapped_nb_reps={boots}
+#""".format( boots=nb_boots,
+            fpr=stats['mean_fpr'],
+            recall = stats['mean_recall'], lowest = stats['mean_lowest_false'],sd_fpr=stats['sd_fpr'],
+            sd_recall = stats['sd_recall'], sd_lowest = stats['sd_lowest_false'])
+        else :
+            bootsy=""
+
+
         outformat ="""#mOTUlizer:mOTUpan:{version}
 #run_name={name}
 #
@@ -161,26 +175,19 @@ def motupan(args):
 #sum_abs_loglikelihood_ratios={SALLHR:.2f}
 #mean_est_genome_size={size:.2f};traits_per_genome
 #{genomes}
-#
-#bootstrapped_mean_false_positive_rate={fpr:.2f};bootstrapped_sd_false_positive_rate={sd_fpr:.2f}
-#bootstrapped_mean_recall={recall:.2f};bootstrapped_sd_recall={sd_recall:.2f}
-#bootstrapped_mean_lowest_false_positive={lowest:.2f};bootstrapped_sd_lowest_false_positive={sd_lowest:.2f}
-#bootstrapped_nb_reps={boots}
-#
+#{boostrap}
 {header}
 {data}
 """
         print(outformat.format(version = __version__ , nb = stats['nb_genomes'],
             name = motu.name.strip("_"),
             core_len = len(motu.core),
+            genomes=genome_line,
             prior_complete=mean([b.checkm_complet for b in motu]),
             post_complete=mean([b.new_completness for b in motu]),
             SALLHR=sum([l if l > 0 else -l for l in motu.likelies.values()]),
             size=mean([100*len(b.cogs)/b.new_completness for b in motu]),
-            boots=nb_boots,
-            genomes=genome_line, fpr=stats['mean_fpr'],
-            recall = stats['mean_recall'], lowest = stats['mean_lowest_false'],sd_fpr=stats['sd_fpr'],
-            sd_recall = stats['sd_recall'], sd_lowest = stats['sd_lowest_false'],
+            boostrap=bootsy,
             header = "\t".join(header), data = "\n".join(["\t".join([str(v[hh]) for hh in header]) for v in out_dict.values()])),
             file=out_handle)
 
