@@ -3,7 +3,7 @@ import tempfile
 import sys
 from subprocess import Popen, PIPE, call
 import os
-
+import shutil
 
 class MetaBin:
     def __repr__(self) :
@@ -39,9 +39,11 @@ class MetaBin:
         return 100*len(self.cogs)/self.new_completness
 
     @classmethod
-    def get_anis(cls, bins, outfile = None, method = "fastANI", block_size = 2500, threads=1):
-
+    def get_anis(cls, bins, outfile = None, method = "fastANI", block_size = 500, threads=1):
         if method == "fastANI":
+            if not shutil.which('fastANI'):
+                print("You need fastANI if you do not provide a file with pairwise similarities, either install it or provide pairwise similarities (see doc...)", file = sys.stderr)
+                sys.exit(-1)
             fastani_file = tempfile.NamedTemporaryFile().name if outfile is None else outfile
 
             mags = [b.fnas for b in bins]
@@ -51,7 +53,7 @@ class MetaBin:
             if len(mag_blocks) > 1:
                 print("You have more then {bsize} bins, so we will run fastANI in blocks, if it crashes due to memory, make smaller blocks".format(bsize = block_size), file=sys.stderr)
 
-            with open(fastani_file, "a") as handle:
+            with open(fastani_file, "w") as handle:
                 handle.writelines(["query\tsubject\tani\tsize_q\tsize_s\n"])
 
             for i,bloc1 in enumerate(mag_blocks):

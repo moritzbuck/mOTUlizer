@@ -23,7 +23,7 @@ python setup.py install
 To make OTUs and get some stats, needs fastANI in the `PATH`, and output of checkm
 
 ```
-mOTUlize.py -k checkm_output.txt  --output a_messy_json-file_with_the_output.json
+mOTUlize.py -k checkm_output.txt  --output a_messy_json-file_with_the_output.json --fnas myfolderwithgenomes/*.fna
 ```
 
 Loads of little options if you do : `mOTUlize.py -h`

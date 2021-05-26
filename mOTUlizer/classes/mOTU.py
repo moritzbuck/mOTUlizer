@@ -130,6 +130,9 @@ class mOTU:
 
     def fastani_matrix(self):
         if not hasattr(self, 'fastani_dict'):
+            if not shutil.which('fastANI'):
+                print("You need fastANI if you do not provide a file with pairwise similarities, either install it or provide pairwise similarities (see doc...)", file = sys.stderr)
+                sys.exit(-1)
             cmd = "fastANI --ql {temp_file}  --rl {temp_file}  -o {temp_out} -t {threads} 2> /dev/null"
             temp_inp = tempfile.NamedTemporaryFile()
             temp_out = tempfile.NamedTemporaryFile()

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import shutil
@@ -7,6 +7,7 @@ from os.path import join as pjoin
 import argparse
 import json
 from random import uniform
+import multiprocessing
 
 #print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
 sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
@@ -52,24 +53,24 @@ def motulize(args):
     mag_contamin = args.MAG_contamination
     sub_complete = args.SUB_completeness
     sub_contamin = args.SUB_contamination
-    threads = args.cpus
+    force = args.force
+    threads = args.threads
     keep_simi = args.keep_simi_file
+
 
     assert 0 < ani_cutoff < 100, "similarity cutoff needs to be between 0 and 100 (percent similarity)"
     assert all([os.path.exists(f) for f in fnas.values()]), "one or some of your fnas don't exists"
-    assert not (len(fnas) == 0 and similarities is None), "you need to give at least one "
+    assert not (len(fnas) == 0 and similarities is None), "you need to give at least either a list of genome FASTA-files ('--fnas' option) or a file with pariwise similarities ('--similarities' option)"
 
     if similarities:
         assert os.path.exists(similarities), "The file for similarities does not exists"
+        keep_simi = None
     if checkm_file:
         assert os.path.exists(checkm_file), "The file for checkm does not exists"
 
-    print("Parsing the checkm-file")
-
-    checkm_info = parse_checkm(checkm_file)
 
     if similarities:
-        print("Loading similarities")
+        print("Loading similarities", file = sys.stderr)
         dist_dict = {}
         with open(similarities) as handle:
             for l in handle:
@@ -92,6 +93,13 @@ def motulize(args):
     else :
         print("{nb_gen} genomes found".format(nb_gen = len(genomes)), file=sys.stderr)
 
+    print("Parsing the completeness/redundancy-file", file = sys.stderr)
+
+    if checkm_file is None:
+        print("No file provided, all genomes are assumed perfect (100% complete, 0% redundancy)", file=sys.stderr)
+        checkm_info = {g : {'Completeness' : 100, 'Contamination' :0} for g in genomes}
+    else :
+        checkm_info = parse_checkm(checkm_file)
 
 
     assert all([g in checkm_info  for g in genomes]), "you do not have completness/contamination info for all you bins, values missing for :" + ", ".join([g for g in genomes if g not in checkm_info][0:10]) + "... (only 10 first shown   )"
@@ -99,19 +107,22 @@ def motulize(args):
     if fnas == {}:
         fnas = {g : None for g in genomes}
 
-    print("making bin-objects")
+    print("making bin-objects", file = sys.stderr)
 
     all_bins = [MetaBin(name = g, cogs = None, faas = None, fnas = fnas[g], complet = checkm_info[g]['Completeness'], contamin = checkm_info[g]['Contamination'], max_complete = 100) for g in genomes]
 
     if dist_dict is None:
         print("Similarities not provided, will compute them with fastANI", file = sys.stderr)
+        if keep_simi and not force:
+            assert not os.path.exists(keep_simi), "similarity file already exists, delete it or use '--force'"
+
         dist_dict = MetaBin.get_anis(all_bins, threads = threads, outfile = keep_simi)
 
-    print("making mOTUs")
+    print("making mOTUs", file = sys.stderr)
 
     mOTUs = mOTU.cluster_MetaBins(all_bins, dist_dict, ani_cutoff, prefix, mag_complete, mag_contamin, sub_complete, sub_contamin)
 
-    print("making stats")
+    print("making stats", file = sys.stderr)
 
     out_dict = {}
     for m in mOTUs:
@@ -119,11 +130,52 @@ def motulize(args):
         stats[m.name]['representative'] = m.get_representative()
         out_dict.update(stats)
 
+    short_out = []
+    header = ['mOTU', 'representative', 'mean_ANI', 'min_ANI', 'missing_edges', 'genomes']
+    for k, v in out_dict.items:
+        row = {
+        'mOTU' : k,
+        'representative' : v['representative'],
+        'mean_ANI' : v['mean_ANI'],
+        'min_ANI' : min([vv[2] for vv in v['ANIs']])
+        'missing_edges' : v['missing_edges'],
+        'genomes' : ";".join([g['name'] for g in v['genomes']])
+        }
+
+    outformat =         outformat ="""#mOTUlizer:mOTUpan:{version}
+#prefix={name}
+#
+#{genomes}
+#
+#
+{header}
+{data}
+"""
+
+
     if args.output:
+        if not force:
+            assert not os.path.exists(args.output), "output file already exists, delete it or use '--force'"
         out_handle = open(out_json, "w")
     else :
         out_handle = sys.stdout
-    json.dump(out_dict, out_handle, indent=4, sort_keys=True)
+    if args.long:
+        json.dump(out_dict, out_handle, indent=4, sort_keys=True)
+    else :
+        print(outformat.format(version = __version__ , nb = stats['nb_genomes'],
+            name = motu.name.strip("_"),
+            core_len = len(motu.core),
+            prior_complete=mean([b.checkm_complet for b in motu]),
+            post_complete=mean([b.new_completness for b in motu]),
+            SALLHR=sum([l if l > 0 else -l for l in motu.likelies.values()]),
+            size=mean([100*len(b.cogs)/b.new_completness for b in motu]),
+            boots=nb_boots,
+            genomes=genome_line, fpr=stats['mean_fpr'],
+            recall = stats['mean_recall'], lowest = stats['mean_lowest_false'],sd_fpr=stats['sd_fpr'],
+            sd_recall = stats['sd_recall'], sd_lowest = stats['sd_lowest_false'],
+            header = "\t".join(header), data = "\n".join(["\t".join([str(v[hh]) for hh in header]) for v in out_dict.values()])),
+            file=out_handle)
+        out_handle.writelines(outformat.format())
     if args.output:
         out_handle.close()
 
@@ -132,8 +184,8 @@ def motulize(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "mOTUlize", description=description_text, epilog = "Let's do this")
     parser.add_argument('--output', '-o', nargs = '?', help = "send output to this file")
-    parser.add_argument('--force', '-f', action='store_true', help = "force execution answering default answers")
-    parser.add_argument('--checkm', '-k',nargs = '?', help = "checkm file (or whatever you want to use as completness)")
+    parser.add_argument('--force', '-f', action='store_true', help = "force execution (overwritting existing files)")
+    parser.add_argument('--checkm', '-k',nargs = '?', help = "checkm file (or whatever you want to use as completness), if not provided, all genomes are assumed to be seed MAG (e.g complete enough)")
     parser.add_argument('--similarities', '-I', nargs = '?', help = "file containing similarities between MAGs, if not provided, will use fastANI to compute one")
     parser.add_argument('--fnas','-F', nargs = '*', help = "list of nucleotide fasta-files of MAGs or whatnot")
     parser.add_argument('--prefix', '-n', nargs = '?', default = "mOTU_", help = "prefix for the mOTU names, default : mOTU_ ")
@@ -142,9 +194,10 @@ if __name__ == "__main__":
     parser.add_argument('--SUB-completeness', '--SC', '-S', nargs = '?', type=float, default = 0, help = "completeness cutoff for recruited SUBs, default : 0")
     parser.add_argument('--SUB-contamination', '--Sc', '-s', nargs = '?', type=float, default = 100, help = "contamination cutoff for recruited SUBs, default : 100")
     parser.add_argument('--similarity-cutoff', '-i', nargs = '?', type=float, default = 95, help = "distance cutoff for making the graph, default : 95")
-    parser.add_argument('--cpus', '-c', nargs = '?', type=int, default = 1, help = "number of threads, default : 1")
-    parser.add_argument('--keep-simi-file', '-K', nargs = '?', default = None, help = "keep generated similarity file if '--similarities' is not procided")
-    parser.add_argument('--txt', '-t', action='store_true', help = "the '--fnas' switch indicates a file with paths")
+    parser.add_argument('--threads', '-t', nargs = None, type = int , default = multiprocessing.cpu_count(), help = "number of threads (default all, e.g. {})".format(multiprocessing.cpu_count()))
+    parser.add_argument('--keep-simi-file', '-K', nargs = '?', default = None, help = "keep generated similarity file if '--similarities' is not provided, does nothing if '--similarity' is provided")
+    parser.add_argument('--txt', '-T', action='store_true', help = "the '--fnas' switch indicates a file with paths")
+    parser.add_argument('--long', action='store_true', help = "longform output, a JSON-file with a lot more information (might be cryptic...)")
     parser.add_argument('--version','-v', action="store_true", help = "get version")
 
     args = parser.parse_args()
@@ -154,12 +207,5 @@ if __name__ == "__main__":
             parser.print_help(sys.stderr)
         print("{script} Version {version}".format(script = __file__, version = __version__))
         sys.exit(1)
-
-    if not args.checkm:
-        print("mOTUlize: error: the following arguments are required: --checkm/-k")
-        sys.exit(1)
-
-
-#    print(args, file=sys.stderr)
 
     motulize(args)
