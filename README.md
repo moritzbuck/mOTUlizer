@@ -10,36 +10,40 @@ Utility to analyse a group of closely related MAGs/Genomes/bins/SUBs of more or 
 
 ## INSTALL
 
-In the future (outdated versino right now)
+With pip (right now not the right version, try again in a few days for hopefully version `0.2.0`)
 
 ```
 pip install mOTUlizer
 ```
 
-Now:
+manually:
 
 ```
+git clone https://github.com/moritzbuck/mOTUlizer.git
+cd mOTUlizer
 python setup.py install
 ```
 
 
 ## USAGE
 
-### EASY
+### mOTUlize
 
 To make OTUs and get some stats, needs fastANI in the `PATH`, and output of checkm
 
 ```
-mOTUlize.py -k checkm_output.txt  --output a_messy_json-file_with_the_output.json --fnas myfolderwithgenomes/*.fna
+mOTUlize.py -k checkm_output.txt --fnas myfolderwithgenomes/*.fna
 ```
 
 Loads of little options if you do : `mOTUlize.py -h`
 
-Also there is `mOTUpan.py` that can compute core genomes and pangenomes, likelihood of a gene to be in all genomes of a set or to only be in some. An intro video here:
+
+### mOTUpan
+
+An intro video [here](https://www.youtube.com/watch?v=VIeV1Gg5NS4):
 
 [![mOTUpan for beginners](https://img.youtube.com/vi/VIeV1Gg5NS4/0.jpg)](https://www.youtube.com/watch?v=VIeV1Gg5NS4)
 
-Needs to be more debugged so try  out at own risk:
 
 ```
 mOTUpan.py -h
@@ -48,5 +52,7 @@ mOTUpan.py -h
 Simplest command to run (needs mmseqs2 installed), but many options:
 
 ```
-python mOTUlizer/bin/mOTUpan.py --faas *.faa
+mOTUpan.py --faas *.faa
 ```
+
+### mOTUconvert

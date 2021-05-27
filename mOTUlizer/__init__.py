@@ -10,7 +10,7 @@ os.chdir(module_path)
 try :
     label = subprocess.check_output(["git", "describe", "--tags"]).strip().decode()
 except :
-    label = "0.1.4"
+    label = "0.2.0"
 
 os.chdir(cwd)
 
