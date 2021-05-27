@@ -63,7 +63,7 @@ class MetaBin:
                     handle.writelines([l +"\n" for l in bloc1])
 
                 for j,bloc2 in enumerate(mag_blocks):
-                        print("doing bloc {i} and {j}".format(i = i, j=j))
+                        print("doing bloc {i} and {j}".format(i = i, j=j), file = sys.stderr)
                         b2_tfile = tempfile.NamedTemporaryFile().name
                         with open(b2_tfile, "w") as handle:
                             handle.writelines([l  +"\n" for l in bloc2])
