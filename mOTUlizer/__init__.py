@@ -7,10 +7,10 @@ module_path = find_spec("mOTUlizer").submodule_search_locations[0]
 
 os.chdir(module_path)
 
-try :
+if os.path.exists(".git"):
     label = subprocess.check_output(["git", "describe", "--tags"]).strip().decode()
-except :
-    label = "0.2.0"
+else:
+    label = "0.2.1"
 
 os.chdir(cwd)
 
