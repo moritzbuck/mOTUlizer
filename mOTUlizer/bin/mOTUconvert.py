@@ -66,7 +66,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog = "mOTUconverts.py", description=description_text, epilog = "Let's do this")
     parser.add_argument('--output', '-o', nargs = '?', help = "send output to this file defaults to stdout")
-    parser.add_argument('input', nargs = 1, metavar = "INPUT", help = "input file(s), check '--list' for specifics")
+    parser.add_argument('input', nargs = '?', metavar = "INPUT", help = "input file(s), check '--list' for specifics")
     parser.add_argument('--gene2genome', nargs='?', help = "if gene names not '${genome_name}_[0-9]*', a tab separated file with id of gene in the fist column and a semi-column separated second column containing genomes_id of genomes containing it")
     parser.add_argument('--in_type', '-I', nargs = '?', default = "emapper" , help = "software generating the input")
     parser.add_argument('--version','-v', action="store_true", help = "get version and exit")

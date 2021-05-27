@@ -29,19 +29,17 @@ __checkm_default__ = 95
 def motupan(args):
     if args.cog_file:
         try :
-            if args.cog_file.endswith(".json") or args.cog_file.endswith(".gid2cog"):
-                with open(args.cog_file) as handle:
-                    cog_dict = json.load(handle)
-            else :
+            with open(args.cog_file) as handle:
+                cog_dict = json.load(handle)
+        except :
+            try :
                 with open(args.cog_file) as handle:
                     cog_dict = {l.split("\t")[0] : l[:-1].split("\t")[1:] for l in handle}
-            cog_dict = {k : set(v) for k,v in cog_dict.items()}
-            assert len(cog_dict) > 0
-        except :
-            print("Either the cog_file does not exists or it is not formated well", file = sys.stderr)
-
+            except :
+                print("Either the cog_file does not exists or it is not formated well", file = sys.stderr)
+        cog_dict = {k : set(v) for k,v in cog_dict.items()}
         if all([len(v) == 0 for v in cog_dict]):
-            print("None of your bins have any cogs in them, that's weird, you probably have wrong delimiter in you file, use tab.\nIf you do not have COGs you can also just run it without the --cog_file option and mOTUlizer will automatically compute some! (slower), file = sys.stderr")
+            print("None of your bins have any cogs in them, that's weird, you probably have wrong delimiter in you file, use tab.\nIf you do not have COGs you can also just run it without the --cog_file option and mOTUlizer will automatically compute some!", file = sys.stderr)
     else :
         cog_dict = {}
 
@@ -126,18 +124,19 @@ def motupan(args):
 
         stats = list(stats.values())[0]
         stats.update(motu.roc_values(boots = nb_boots))
-
-        for k in set(stats['cogs']['aa'].values()):
+        cogs = set([cc for g,c in stats['cogs'].items() for cc in c]) if 'aa' not in stats['cogs'] else set(stats['cogs']['aa'].values())
+        for k in cogs:
             out_dict[k] = {}
             out_dict[k]['type'] = 'core' if k in stats['core'] else 'accessory'
             out_dict[k]['genome_occurences'] = 0
             out_dict[k]['log_likelihood_to_be_core'] = stats['likelies'][k]
             out_dict[k]['genomes'] = []
-            out_dict[k]['genes'] = []
+            out_dict[k]['genes'] = [] if 'aa' in stats['cogs'] else ["NA"]
             out_dict[k]['trait_name'] = k
-        for k,v in stats['cogs']['aa'].items():
-            out_dict[v]['genes'] += [k]
-        for k,v in stats['cogs']['genome'].items():
+        if 'aa' in stats['cogs']:
+            for k,v in stats['cogs']['aa'].items():
+                out_dict[v]['genes'] += [k]
+        for k,v in stats['cogs'].items() if 'aa' not in stats['cogs'] else stats['cogs']['genome'].items():
             for vv in v:
                 out_dict[vv]['genomes'] += [k]
                 out_dict[vv]['genome_occurences'] += 1
