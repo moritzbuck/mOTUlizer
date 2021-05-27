@@ -42,7 +42,7 @@ class EmapperParse(Parser):
         from ete3 import NCBITaxa
         tax_db = NCBITaxa()
 
-        with open(infile[0]) as handle:
+        with open(infile) as handle:
             header = None
             counter = 0
             while not header and counter < 15:
@@ -104,7 +104,7 @@ class PPanGGolinParse(Parser):
         import hdf5plugin
 
         print("Parse and decode gene-clusters from the h5py-file", file = sys.stderr)
-        with h5py.File(infile[0], "r") as handle:
+        with h5py.File(infile, "r") as handle:
             gene_id2family = {a.decode() : b.decode() for a,b in tqdm(handle['geneFamilies'])}
 
         print("Stratify it to genome", file = sys.stderr)
@@ -125,7 +125,7 @@ class RoaryParse(Parser):
 
     def convert(self, infile, count = False):
         print("Parse the cluster-file", file = sys.stderr)
-        with open(infile[0], "r") as handle:
+        with open(infile, "r") as handle:
             gene_id2family = {ll : l.split(':')[0] for l in tqdm(handle) for ll in l.split(":")[1].strip().split()}
 
         print("Stratify it to genome", file = sys.stderr)
@@ -146,7 +146,7 @@ class MmseqsParse(Parser):
 
     def convert(self, infile, count = False):
         print("Parse the cluster-file", file = sys.stderr)
-        with open(infile[0], "r") as handle:
+        with open(infile, "r") as handle:
             gene_id2family = {l.strip().split('\t')[1] : l.strip().split('\t')[0] for l in tqdm(handle)}
 
         print("Stratify it to genome", file = sys.stderr)

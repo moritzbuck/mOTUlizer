@@ -57,13 +57,19 @@ mOTUpan.py --faas *.faa
 
 #### Key options:
 
+Check all flags in with `--help`, but here are some keys ones a bit more explained
+
 * `--boots BOOTS` : runs `BOOTS` bootstraps, where artificial genomes are generated using the gene-partitioning obtained with `mOTUpan` (e.g. the core genes are in all artificial genomes, the others are a gene-pool with their frequency conserved), these genomes are then rarefied according to the posterioir completeness estimates. The bootstrap will provide an estimate of the false positive rate (e.g. fraction of core genes that might not be), the recall (fraction of core genes that have been classified as such in the bootstrap), and 'lowest false', the lowest frequency of any false positive found (e.g. should be high, meaning that your possible false positive are actually highly prevalent in your genome-set). Higher number of bootstraps give you a standard deviation for these numbers.
 
 * `--cog_file` : can be used as an alternative to `--faas`, you can use it to provide you own gene-clusters (or other genetically encoded traits). The file should either be a `JSON`-file encoding a dictionary where the keys are the genome names and the values are lists of traits/genes (example in `example_files/example_genome2cog.json`). Or a `TAB`-separated file, where the first column is the genome name and followed by `TAB`-separated trait/gene-names (example in `example_files/example_genome2cog.tsv`).
 
 * `--genome2cog_only` : only runs the gene-clustering (`mmseqs east_cluster`), returns a `JSON`-datastructure compatible with `--cog_file`
 
+* `--checkm` : provide a file with Completenesses and Contaminations (Redundancy), it accepts the output of `checkm` or any other `TAB`-separated file with at least three columns: `Bin Id`, `Completeness`, and `Contamination`. `Bin Id` should be the genome names (e.g. file name minus extension), `Completeness` and `Contamination` values between 0 and 100. Note that `Contamination` is not actually used yet...
 
+* `--max_iter` : maximum number of iterations for the recursive aspect of motupan. You might want to put that to `1` if you have only few traits that would not be sufficient to estimate completeness.
 
 
 ### mOTUconvert
+
+A small program generating appropriate input files for `mOTUpan.py` from the output of some of my favorite, or the publics favorite programs

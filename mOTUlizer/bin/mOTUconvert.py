@@ -36,7 +36,7 @@ mmseqs2 :
 
 """
 
-def main(args):
+def motuconvert(args):
 
     method = args.in_type
     if method == "emapper":
@@ -48,7 +48,7 @@ def main(args):
     elif method == "mmseqs2":
         converter = MmseqsParse()
     else :
-        print("This is not implemented yet run with '--list' to see available options" )
+        print("This is not implemented yet run with '--list' to see available options", file = sys.stderr )
         sys.exit(0)
 
     genome2cogs = converter.convert(infile = args.input, count = args.count)
@@ -77,16 +77,16 @@ if __name__ == "__main__":
 
     if len(sys.argv)==1:
         parser.print_help()
-        print("{script} Version {version}".format(script = __file__, version = __version__))
+        print("{script} Version {version}".format(script = __file__, version = __version__), file = sys.stderr)
         sys.exit(1)
 
     if args.version:
-        print("{script} Version {version}".format(script = __file__, version = __version__))
+        print("{script} Version {version}".format(script = __file__, version = __version__), file = sys.stderr)
         sys.exit()
 
     if args.list:
         print(list_text)
-        print("{script} Version {version}".format(script = __file__, version = __version__))
+        print("{script} Version {version}".format(script = __file__, version = __version__), file = sys.stderr)
         sys.exit()
 
-    main(args)
+    motuconvert(args)
