@@ -15,7 +15,7 @@ a number of example files are to be found in the `example_files`-folder, the `fa
 With conda:
 
 ```
-conda install -c conda-forge  -c bioconda  motulizer
+conda install -c conda-forge  -c bioconda  tqdm motulizer
 ```
 
 With pip:
