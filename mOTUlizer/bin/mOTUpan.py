@@ -204,7 +204,7 @@ if __name__ == "__main__":
     parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction [0-100]")
     parser.add_argument('--random_seed', '--rs', action='store_true', help = "random seed completeness between 5 and 95 percent")
     parser.add_argument('--genome2cog_only', action='store_true', help = "returns genome2cog only")
-    parser.add_argument('--precluster', action='store_true', default = False, help = "precluster proteoms with cd-hit, mainly for legacy reasons, mmseqs2 is faaaaaast")
+    parser.add_argument('--precluster', action='store_true', default = False, help = "precluster proteomes with cd-hit, mainly for legacy reasons, mmseqs2 is faaaaaast")
     parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot, or a text file with paths to the faas (with the --txt switch)")
     parser.add_argument('--txt', action='store_true', help = "the '--faas' switch indicates a file with paths")
     parser.add_argument('--cog_file', '--cogs', '-c', nargs = '?', help = "file with COG-sets (see doc)")
