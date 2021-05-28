@@ -12,7 +12,13 @@ a number of example files are to be found in the `example_files`-folder, the `fa
 
 ## INSTALL
 
-With pip, recommended until I made a conda package.
+With conda:
+
+```
+conda install -c conda-forge  -c bioconda  motulizer
+```
+
+With pip:
 
 ```
 pip install mOTUlizer
