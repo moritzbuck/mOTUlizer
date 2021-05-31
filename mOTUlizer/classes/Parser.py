@@ -32,7 +32,7 @@ class EmapperParse(Parser):
                 pip install ete3
 
             or, if conda is more your cupa tea, you can do :
-                conda install -c etetoolkit ete3
+                conda install -c conda-forge -c etetoolkit ete3=3.1.2
 
             or whichever other way you like. I don't judge.
             """, file = sys.stderr)
