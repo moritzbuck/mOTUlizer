@@ -173,14 +173,15 @@ class mOTU:
     def get_representative(self, method = "complex", max_redund = 5, min_complete = 95):
             tt = [v.get_data() for v in self]
             data = { t['name'] : t for t in tt}
-
+            if all([v['checkm_contamin'] > max_redund for v in data.values()]):
+                return max( [ (k , v['checkm_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
             data = {k : v for k,v in data.items() if v['checkm_contamin'] < max_redund}
             if any([v['checkm_complet'] > min_complete for v in data.values()])  :
                 data = {k : v for k,v in data.items() if v['checkm_complet'] > min_complete}
                 best_redund = min(data.items(), key = lambda x : x[1]['checkm_contamin'])[1]['checkm_contamin']
-                return max( [ (k , v['checkm_contamin']) for k,v in data.items() if v['checkm_contamin'] == best_redund], key = lambda x: x[1])[0]
-            else :
-                return max( [ (k , v['checkm_contamin']) for k,v in data.items()], key = lambda x: x[1])[0]
+                return max( [ (k , v['checkm_complet']) for k,v in data.items() if v['checkm_contamin'] == best_redund], key = lambda x: x[1])[0]
+            else:
+                return max( [ (k , v['checkm_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
 
     # def get_representative(tt, max_redund = 5, min_complete = 95):
     #         data = { t['name'] : t for t in tt}
