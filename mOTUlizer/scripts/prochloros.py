@@ -29,6 +29,9 @@ stratfresh = pandas.read_csv("/home/moritz/data/data_submit/metadata/master_tabl
 #stratfresh_motus = pandas.read_csv("/home/moritz/data/data_submit/metadata/Supplementary_Table_S7_-_Data_about_mOTUs.csv", index_col=0)
 #stratfresh_motus["est_size"] = list(100*stratfresh.loc[stratfresh_motus.representative_MAGs].length/stratfresh.loc[stratfresh_motus.representative_MAGs].completeness/1000000)
 with open("stratfreshmotus.json") as handle :
+    stratfresh_motus = json.load(handle)
+
+with open("stratfreshmotus.json") as handle :
     bin2stratfreshmotu = { g['name'] : k for k,v in tqdm(json.load(handle).items()) for g in v['genomes']  }
 
 with open("stratfreshmotus.json") as handle :
@@ -185,7 +188,7 @@ def process_species_cores():
             scaffold_count = stratfresh.loc[tliss].nb_contigs if type =="stratfreshdb" else r95.loc[tliss].scaffold_count
             new_comps_roary = {gid.replace("RS_","").replace("GB_","") : len(v['roary_cogs'][gid.replace("RS_","").replace("GB_","")].intersection(v['motupan_roary']))/len(v['motupan_roary'])  for gid in v['gids']}
             new_comps_ppan = {gid.replace("RS_","").replace("GB_","") : len(v['ppan_cogs'][gid.replace("RS_","").replace("GB_","")].intersection(v['motupan']))/len(v['motupan'])  for gid in v['gids']}
-            goods = set(goods)
+#            goods = set(goods)
             core_stats[k] = {
             'taxo' : k if type == "gtdb" else "tbd", #stratfresh_motus.loc[k].consensus_tax,
             'motupan_w_ppan' : len(v['motupan']),
@@ -201,7 +204,8 @@ def process_species_cores():
             'mean_est_roary_cogs' :  mean([ len(v['roary_cogs'][k])/c  for k,c in new_comps_ppan.items() if c > 0.4] ),
             'mean_scaff_count' : mean(scaffold_count),
             'type' : type,
-            'est_size' :  r95.loc[gtdb2rep[k]].est_size if type == "gtdb" else  -1 #stratfresh_motus.loc[k].est_size
+            'est_size' :  r95.loc[gtdb2rep[k]].est_size if type == "gtdb" else  stratfresh_motus.loc[k].est_size
+            'genoms_ids' : ";".joinb(v['gids '])
             }
 
 

@@ -28,6 +28,7 @@ If the columns are file names, the folders are removed (mainly so it can read fa
 
 """
 
+fasta_exts = [".fna", ".fa", ".fasta", ".fna", ".ffn"]
 
 def motulize(args):
     #parse and check your amino-acid files
@@ -72,8 +73,8 @@ def motulize(args):
             for l in handle:
                 if "query" not in l:
                     ll = l.split("\t")
-                    g1 = ".".join(os.path.basename(ll[0]).split(".")[:-1]) if ll[0].endswith(".fna") else ll[0]
-                    g2 = ".".join(os.path.basename(ll[1]).split(".")[:-1]) if ll[1].endswith(".fna") else ll[1]
+                    g1 = ".".join(os.path.basename(ll[0]).split(".")[:-1]) if any([ll[0].endswith(ext) for ext in fasta_exts]) else ll[0]
+                    g2 = ".".join(os.path.basename(ll[1]).split(".")[:-1]) if any([ll[1].endswith(ext) for ext in fasta_exts]) else ll[1]
                     dist = float(ll[2])
                     dist_dict[(g1,g2)] = dist
     else :

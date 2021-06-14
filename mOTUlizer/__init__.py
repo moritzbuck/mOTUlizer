@@ -10,7 +10,7 @@ os.chdir(module_path)
 if os.path.exists(".git"):
     label = subprocess.check_output(["git", "describe", "--tags"]).strip().decode()
 else:
-    label = "0.2.2"
+    label = "0.2.3"
 
 os.chdir(cwd)
 

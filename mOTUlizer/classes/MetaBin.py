@@ -71,7 +71,7 @@ class MetaBin:
                         out_tfile = tempfile.NamedTemporaryFile().name
                         call("fastANI --ql {b1} --rl {b2} -o {out} -t {threads} 2> /dev/null".format(b1 = b1_tfile, b2 = b2_tfile, out = out_tfile, threads = threads), shell = True)
                         with open(out_tfile) as handle:
-                            new_dat = ["\t".join([".".join(ll.split("/")[-1].split(".")[:-1]) if "." in ll else ll for ll in l.split()]) +"\n" for l in handle.readlines()]
+                            new_dat = ["\t".join([ll for ll in l.split()]) +"\n" for l in handle.readlines()]
                         with open(fastani_file, "a") as handle:
                             handle.writelines(new_dat)
 
@@ -82,6 +82,8 @@ class MetaBin:
             with open(fastani_file) as handle:
                 handle.readline()
                 out_dists = {(l.split()[0], l.strip().split()[1]) : float(l.split()[2]) for l in handle}
+#                tfile = lambda k : ".".join(k.split(".")[:-1]) if (k.endswith(".fna") or k.endswith(".fa") or k.endswith(".fasta") or k.endswith(".fna") or k.endswith(".ffn")) else k
+#                out_dists = {(tfile(k[0]),tfile(k[1])) : v for k,v in out_dists.items()}
             if outfile is None:
                 os.remove(fastani_file)
         else :
