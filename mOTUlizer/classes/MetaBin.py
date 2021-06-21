@@ -4,6 +4,7 @@ import sys
 from subprocess import Popen, PIPE, call
 import os
 import shutil
+from mOTUlizer.config import FASTA_EXTS
 
 class MetaBin:
     def __repr__(self) :
@@ -81,7 +82,10 @@ class MetaBin:
             os.remove(b1_tfile)
             with open(fastani_file) as handle:
                 handle.readline()
-                out_dists = {(l.split()[0], l.strip().split()[1]) : float(l.split()[2]) for l in handle}
+                out_dists = {(os.path.basename(l.split()[0]), os.path.basename(l.strip().split()[1])) : float(l.split()[2]) for l in handle}
+                out_dists = {( ".".join(k[0].split(".")[:-1]) if any([k[0].endswith(ext) for ext in FASTA_EXTS]) else k[0],
+                               ".".join(k[1].split(".")[:-1]) if any([k[1].endswith(ext) for ext in FASTA_EXTS]) else k[1] ): v
+                               for k,v in out_dists.items() }
 #                tfile = lambda k : ".".join(k.split(".")[:-1]) if (k.endswith(".fna") or k.endswith(".fa") or k.endswith(".fasta") or k.endswith(".fna") or k.endswith(".ffn")) else k
 #                out_dists = {(tfile(k[0]),tfile(k[1])) : v for k,v in out_dists.items()}
             if outfile is None:
