@@ -41,7 +41,7 @@ To make OTUs and get some stats, needs [`fastANI`](https://github.com/ParBLiSS/F
 
 simply run with:
 ```
-mOTUlize.py --fnas example_files/fnas/*.fna
+mOTUlize.py --fnas example_files/fnas/*.fna -o output.tsv
 ```
 
 Loads of little options if you do : `mOTUlize.py -h`
@@ -70,7 +70,7 @@ mOTUpan.py -h
 Simplest command to run (needs mmseqs2 installed), but many options:
 
 ```
-mOTUpan.py --faas *.faa
+mOTUpan.py --faas *.faa -o output.tsv
 ```
 
 #### Key options:

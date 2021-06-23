@@ -116,7 +116,7 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
                 recs = {g : l[:-1].split()[0]  for l in handle for g in clusters[l[:-1].split()[1]]}
             else :
                 recs = {l[:-1].split()[1] : l[:-1].split()[0]  for l in handle}
-
+        os.remove(mmseqs_dat + "_cluster.tsv")
         #pretty formating names
         fill = len(str(len(set(recs.values()))))
 
