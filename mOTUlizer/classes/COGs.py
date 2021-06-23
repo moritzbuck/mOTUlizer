@@ -110,13 +110,12 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
         mmseqs_dat = pjoin(temp_folder, "mmseqs_")
         os.system("mmseqs easy-cluster --threads {threads} --min-seq-id {seqid} --cov-mode {covmode} -c {cov} {faas} {out} {tmp} 2> /dev/null > /dev/null".format(covmode = covmode, cov = cov, seqid=seqid, faas = all_faas_file, out = mmseqs_dat, tmp = temp_folder, threads = threads))
 
-        shutil.copy(mmseqs_dat + "_cluster.tsv", ".")
         with open(mmseqs_dat + "_cluster.tsv") as handle:
             if precluster:
                 recs = {g : l[:-1].split()[0]  for l in handle for g in clusters[l[:-1].split()[1]]}
             else :
                 recs = {l[:-1].split()[1] : l[:-1].split()[0]  for l in handle}
-        os.remove(mmseqs_dat + "_cluster.tsv")
+
         #pretty formating names
         fill = len(str(len(set(recs.values()))))
 
