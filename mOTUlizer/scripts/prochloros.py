@@ -204,8 +204,8 @@ def process_species_cores():
             'mean_est_roary_cogs' :  mean([ len(v['roary_cogs'][k])/c  for k,c in new_comps_ppan.items() if c > 0.4] ),
             'mean_scaff_count' : mean(scaffold_count),
             'type' : type,
-            'est_size' :  r95.loc[gtdb2rep[k]].est_size if type == "gtdb" else  stratfresh_motus.loc[k].est_size
-            'genoms_ids' : ";".joinb(v['gids '])
+#            'est_size' :  r95.loc[gtdb2rep[k]].est_size if type == "gtdb" else  stratfresh_motus.loc[k].est_size
+            'genoms_ids' : ";".join(v['gids'])
             }
 
 

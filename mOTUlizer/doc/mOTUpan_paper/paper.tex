@@ -1,0 +1,164 @@
+\documentclass{article}
+\usepackage[a4paper, margin=1in]{geometry}
+
+\usepackage{booktabs}
+\usepackage{caption}	 % http://mirror.easyname.at/ctan/macros/latex/contrib/caption/caption-eng.pdf
+\usepackage{graphicx}
+%\usepackage{authblk}
+\usepackage{hyperref}
+\usepackage[numbers,square]{natbib}
+\usepackage{amsmath}
+\usepackage{lineno}
+\linenumbers
+
+\bibliographystyle{unsrtnat}
+
+
+\author{Moritz Buck\thanks{corresponding author, e-mail: moritz.buck@slu.se} \and Maliheh Mehrshad\thanks{contributed equally}  \and Stefan Bertilsson\footnotemark[2]}
+
+\date{Department of Aquatic Sciences and Assessment\\ Swedish University of Agricultural Sciences\\ Uppsala, Sweden}
+\title{mOTUpan: a robust Bayesian approach to leverage metagenome assembled genomes for core-genome estimation}
+
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Recent advances in sequencing and bioinformatics have expanded the tree of life by providing genomes for uncultured environmentally relevant clades, either through metagenome assembled genomes (MAGs) or single-cell assembled genomes (SAGs). While this expanded diversity can provide novel insights about microbial population structure, most tools available for core-genome estimation are overly sensitive to genome completeness. Consequently a major portion of the huge phylogenetic diversity uncovered by environmental genomics approaches remain excluded from such analyses. We present mOTUpan, a novel iterative Bayesian method for computing the core-genome for sets of genomes of highly diverse completeness range. The likelihood for each gene-cluster to belong to core- or accessory-genome is estimated by computing the probability of its presence/absence pattern in the target set of genomes. The core-genome prediction is computationally efficient and can be scaled up to thousands of genomes. It has shown comparable estimates as state-of-the-art tools Roary and PPanGGoLiN for high-quality genomes and outperforms them at lower completeness thresholds. mOTUpan wraps a bootstrapping procedure to estimate the quality of a specific core-genome prediction, as the accuracy of each run will depend on the specific completeness distribution and the number of genomes in the dataset under scrutiny. mOTUpan is implemented in the mOTUlizer software package, and available at \href{github.com/moritzbuck/mOTUlizer}{github.com/moritzbuck/mOTUlizer}, under GPL 3.0 license.
+\end{abstract}
+
+\section*{Introduction}
+
+The continuous advancements of high throughput sequencing technologies and bioinformatics tools over the last two decades have fueled large-scale ecogenomics analyses leading up to a new view of the tree of life\citep{hug_2016, nayfach_2021, parks_2020}. This refined view enabled by metagenomics and single-cell genomics reveals that uncultured bacteria and archaea exclusively represented by MAGs (metagenome assembled genome) and SAGs (single-cell amplified genome) account for ca. 75\% of the cataloged phylogenetic microbial diversity\citep{nayfach_2021}. Despite their unequivocal potential to reveal diversity, the inherent incompleteness of MAGs and SAGs has so far hindered attempts in the large-scale study of sub-population diversity, core-genome structure, and genome evolution of these phylogenetically diverse species.
+
+All non-redundant genes in genomes from a genome-set are part of its pangenome and can be categorized as either core or accessory\citep{brockhurst_2019}. The core-genome is a set of genes common among all genomes of a species and are supposedly responsible for the basic aspects of the cell’s biology and phenotypic traits\citep{medini_2005}. The accessory part of the genome is underpinning the sub-species diversity and is defined as genes present in two or more but not all representatives of a species. Accessory genes typically encode for functions that provide cells with adaptive advantages (e.g., supplementary metabolic pathways, enzymatic activities, antibiotic resistance, phage and predation resistance, pathogenicity, etc.)\citep{brockhurst_2019, medini_2005, domingo-sananes_2021}, but are often also relics or live selfish genetic elements \citep{gil_2012}.
+
+A key prerequisite for the comparative analyses of the sub-species diversity and ecological adaptations is to first have a robust estimation of the core-genome that will enable a better assessment of the accessory counterparts. However, core-genome analyses are limited in taxonomic scope\citep{biller_2015, fang_2011, blaustein_2019, delmont_2018, lopez-perez_2016, deschamps_2014}, largely because of the severe limitations in culturing microbes and obtaining high quality genomes, combined with existing bioinformatics methods being dependent on high quality genomes to scaffold such analyses. Most methods used for core-genome analysis only work with sets of high quality and complete genomes and are very sensitive to missing genes and fragmented genomes\citep{page_2015}. These methods often concentrate on developing novel methods for computation of clusters of orthologous genes (COGs) in the population of interest\citep{page_2015} and use only simple binary presence/absence models for the core-genome estimation (e.g. a COG is core if it is in all of the genomes of the clade). Such methods perform best when used on a moderate number of high-quality genomes generated from cultured microbial isolates. Accordingly, these methods are unable to deal with the rapidly growing database of incomplete and fragmented MAGs and SAGs of the uncultured majority of earth’s microbiome\citep{nayfach_2021}. Due to these methodological limitations, our understanding of the size and structure of microbial core-genomes and pangenome dynamics remain elusive and lag behind our growing appreciation of microbial phylogenetic diversity. The recently released software, PPanGGoLiN, uses synteny networks to compute clusters of co-occurring gene-clusters instead of presence/absence. This method is highly scalable, fast, and robust enough to deal with incomplete genomes\citep{gautreau_2020}. However, this method could be sensitive to fragmentation which is a prominent feature of most incomplete MAGs and SAGs, and is not explicitly tailored to find the core, but rather to find clusters of synthenic genes.
+
+Here we present a novel approach for computing core-genomes relying on a Bayesian estimator of the observed presence/absence patterns of discrete genome-encoded traits (any trait that can be encoded in a genome, e.g. gene-cluster, COG, functional annotations, etc.) in sets of incomplete MAGs/SAGs and complete genomes. We wrote a software tool, mOTUpan, that can estimate if any genome-encoded trait is more likely to be present in all genomes of a genome-set or only in a subset. mOTUpan can compute the core-genome partitioning for genome-sets of a wide range of qualities, and is computationally efficient, agnostic to the genome-encoded traits used, and very robust to incompleteness.
+
+\section*{Methods}
+\subsection*{Bayesian approach for core-genome estimation}
+
+mOTUpan can use any set of genomes that is suspected to share a certain number of genome-encoded traits. We typically use clusters where all genomes are within compact clusters defined by a 95\% average nucleotide identity (ANI) threshold. We call such clusters mOTUs (metagenomic Operational Taxonomic Units), that can be seen as an operational definition of species. However, genomes clustered at any other taxonomic level, or any other way one can imagine (by niche, predator, host, etc.), are valid too.  We will use the term genome as a shorthand for any set of nucleotide sequences originating from the same organism. This could be draft genomes, complete genomes, MAGs, or SAGs. Each genome is first described as a set of genome-encoded traits. Here we will use gene-clusters, but it should be mentioned that mOTUpan is agnostic to the specific form of such traits, one could use genes, COGs, functional annotations, or any other discrete trait that is encoded by a genome. mOTUpan then uses an iterative Bayesian approach to classify each trait of the genome in a genome-cluster as a core- or accessory-trait based on a likelihood ratio. For each of the two hypotheses (core- or accessory-trait) a probability is computed using a genome completeness prior inferred for each genome (genome completeness can be calculated using CheckM\citep{parks_2015}, or a fixed value used). The most likely trait category (core or accessory) is then picked as class for that trait. Using this new classification, we compute posterior completeness estimates, which can be used as a prior for a second iteration and then repeat this entire process until convergence.
+
+\subsection*{Probability models}
+
+To compute the probability of a distribution of a specific trait in the genome-set $\textrm{{mOTU}}$ under the assumption that it is in the core, we multiply the propability $p_{\textrm{trait} \in \textrm{g\textbar core}}$ of any genome $g$ ($g$ is treated as a set of traits) that has that gene-cluster, with the inverse probability $1-p_{\textrm{trait} \in \textrm{g\textbar core}}$ for the genomes that do not have that trait. Where the probability $p_{\textrm{trait} \in \textrm{g\textbar core}}$ is actually directly the prior completeness estimate $c_g$ of $g$, e.g. equations \ref{eq:core_single} and \ref{eq:core_whole}:
+
+\begin{equation} \label{eq:core_single}
+p_{\textrm{trait\textbar core}}=\prod_{\substack{\textrm{g} \in \textrm{mOTU}\\ \textrm{if trait} \in \textrm{g}}} p_{\textrm{trait} \in \textrm{g\textbar core}} \prod_{\substack{\textrm{g} \in \textrm{mOTU}\\ \textrm{if trait } \notin \textrm{g}}}(1-p_{\textrm{trait} \in \textrm{g\textbar core}})
+\end{equation}
+
+\begin{equation} \label{eq:core_whole}
+p_{\textrm{trait} \in \textrm{g\textbar core}}=c_g
+\end{equation}
+
+For the probability under the assumption that it is in the accessory fraction of the genome, we will have to make some further assumptions with regards to the structure of the pangenome. We have assumed that the traits in the pangenome that are not in the core, are independent, and each trait has a frequency $\frac{|\textrm{trait}|}{|T|}$ where $|\textrm{trait}|$ is the number of genomes in $\textrm{mOTU}$ that have that trait, and $|T|$ the total size of the traits-pool, e.g. $\sum_{\substack{\textrm{all traits}}}{|\textrm{trait}|}$. To ``fill" the accessory fraction of a genome, we draw ``$|g|-c_g|\textrm{core}_{\textrm{mOTU}}|$"-times, which is the number of spots in the accessory part of the genome assuming a genome with $|g|$ traits, core size $|\textrm{core}_\textrm{mOTU}|$ and completeness $c_g$. Resulting in equations \ref{eq:access_single} and \ref{eq:access_whole}:
+
+\begin{equation} \label{eq:access_single}
+p_{\textrm{trait\textbar access}}=\prod_{\substack{\textrm{g} \in \textrm{mOTU}\\ \textrm{if trait} \in \textrm{g}}} (1-\overline{p}_{\textrm{trait} \in \textrm{g\textbar access}}) \prod_{\substack{\textrm{g} \in \textrm{mOTU}\\ \textrm{if trait } \notin \textrm{g}}} \overline{p}_{\textrm{trait} \in \textrm{g\textbar access}}
+\end{equation}
+
+\begin{equation} \label{eq:access_whole}
+\overline{p}_{\textrm{trait} \in \textrm{g\textbar access}}=(1-\frac{|\textrm{trait}|}{|T|})^{|g|-c_g|\textrm{core}_{\textrm{mOTU}}|}
+\end{equation}
+
+For practical reasons, these computations are all done in log-space, resulting in a log-likelihood ratio:
+
+\begin{equation} \label{eq:llhr}
+\textrm{LLHR}=\log{(p_{\textrm{trait\textbar core}})}-\log{(p_{\textrm{trait\textbar access}})}
+\end{equation}
+
+If the $\textrm{LLHR}$ of equation \ref{eq:llhr} is positive, the trait is considered core, if negative, it is considered accessory. Using this classification, we recompute an updated completeness estimate for each genome:
+
+\begin{equation} \label{eq:complete}
+c_g=\frac{|\textrm{core}_\textrm{mOTU} \cap \textrm{g}|}{|\textrm{core}_\textrm{mOTU}|}
+\end{equation}
+%
+, where $\textrm{core}_\textrm{mOTU}$ is the set of all traits classified as core.
+
+After this step, we rerun the likelihood computation. This is repeated until convergence, to obtain a final set of core-traits and accessory-traits, and posterior completeness estimates.
+
+\subsection*{Bootstrapped false-discovery rate and sensitivity}
+
+In addition to the likelihood ratio between the two probabilities, a bootstrapping approach has been integrated in mOTUpan to estimate the false-discovery rate and sensitivity of a specific partitioning. Synthetic genomes are built by drawing gene-clusters from the original genome-set according to the partitioning (e.g. every synthetic genome has all of the core genes-clusters, and the accessory gene-clusters are drawn randomly from the other gene-clusters according to their frequency). These synthetic genomes are then rarefied according to the genome-set’s posterior completeness estimate. This synthetic set of genomes are then run through mOTUpan again and these results are used to estimate the false-positive rate and sensitivity. Multiple synthetic data-sets can be analyzed to obtain a better estimate.
+
+\subsection*{Benchmarking mOTUpan for core-genome estimation}
+
+To benchmark the core-genomes computed by mOTUpan against other commonly used core-genome analysis tools, we calculated the core-genomes for 301 species containing a total of 11570 genomes (species were rarefied to 50 genomes to make the runs tractable with Roary) from the genome taxonomy database (GTDB)\citep{parks_2020} and  258 mOTUs containing 8955 genomes in total from the StratFreshDB\citep{buck_2021a}. The MAGs were reclustered with mOTUlize\citep{buck_2021} with less stringent parameters (``\texttt{--MAG-completeness 30  --MAG-contamination 10}'') to have more low quality mOTUs and compare the performance of mOTUpan to Roary\citep{page_2015} and PPanGGOLiN\citep{gautreau_2020}. Genome statistics, accession numbers and taxonomy are available in the Supplementary Table S1. This step aims to highlight and compare the performance of mOTUpan with Roary and PPanGGOLiN with regards to the ability to handle incomplete and fragmented genomes.
+
+For more detailed benchmarking of mOTUpan performance, we selected a dataset of genomes affiliated with the \textit{Prochlorococcus\_A} genus from the GTDB. All genomes classified as \textit{Prochlorococcus\_A} according to GTDBtk\citep{chaumeil_2020} found in RefSeq as well as GORG\citep{pachiadaki_2019}, were clustered into mOTUs (using mOTUlize\citep{buck_2021} with standard parameters), the mOTU with the largest number of genomes was used (Supplementary Table S2 for genome statistics and accession numbers). This \textit{Prochlorococcus} mOTU consists of 388 genomes whereof 3 are closed genomes and 16 genomes are estimated to be more than 95\% complete according to CheckM\citep{parks_2015} results. Genomes assigned to this mOTU range in completeness from 8.59\% to 99.52\% (median=69.05\%) (Supplementary Table S2). mOTUpan’s performance for core-genome estimates for this \textit{Prochlorococcus} mOTU was benchmarked against PPanGGOLiN using the gene-clusters generated by it (PPanGGOLiN uses mmseqs\citep{steinegger_2017} internally for gene-clustering).
+
+\section*{Results and Discussion}
+
+\subsection*{Overview of the mOTUpan’s Bayesian approach}
+The Bayesian approach adopted in this tool allows us to leverage the genomic diversity uncovered by incomplete and fragmented MAGs and SAGs for exploring the core-genome and pangenome structure of bacterial and archaeal species (or any other set of genomic traits). Most available tools such as Roary rely on a hard presence/absence threshold for defining the core-genome. This limitation renders such tools largely unusable when dealing with incomplete and fragmented MAGs and SAGs. Comparing the performance of Roary and mOTUpan for core-genome estimation with the gene-clusters computed by Roary is equivalent to comparing mOTUpan to a hard threshold approach.
+
+The network nature of PPanGGOLiN makes it relatively robust to deal with some degree of incompleteness, however as it is looking for patterns of synteny to determine the persistent fraction of the genomes, too much fragmentation (that is common in MAGs and SAGs) could cause problems in calculations of the persistent fraction of the genomes. In the case of species represented by MAGs and SAGs, the genes that are classified by PPanGGOLiN as ``persistent'' are very likely to be a part of the core, but the approach will likely overlook some core genes. The genes classified as ``shell'' will thus contain part of the core-genome as well as highly prevalent genes often organized as operons. mOTUpan on the other hand, bypasses both incompleteness and fragmentation limitations and offers a robust estimation of the core-genome and pangenome for sets of incomplete and fragmented MAGs and SAGs. mOTUpan also calculates bootstrapped false-discovery rate and sensitivity for the core-genome/pan-genome partitioning.
+
+There are widespread and valid concerns that MAGs are contaminated by contigs that might not be a genuine part of their genome, as binning tools may mistakenly cluster them together with the rest of the MAG. MAGs are usually screened for putative contamination with tools such as CheckM that relies on a limited dataset of high-quality genomes to compute a set of markers. mOTUpan can however address this known problem in a different way, as genes annotated as core have a very low likelihood of being contaminants and can thus be used for prediction of genome quality. Thus, mOTUpan allows users to refine the completeness values estimated by CheckM. Additionally, for other genome-sets, viruses or plasmids, mOTUpan can still obtain a completeness estimate.
+
+\subsection*{Benchmarking mOTUpan against Roary and PPanGGOLiN along the completeness scale}
+
+To benchmark the performance of mOTUpan against Roary, we used the gene-clusters generated by Roary. Comparing the performance along the completeness scale shows that Roary is highly sensitive to genome completeness, as Roary’s core-genome estimate drop away considerably from that of mOTUpan when completeness decreases (Fig. \ref{fig:roary}A-B). Some of these limitations can be bypassed by manually adjusting thresholds in Roary, but while this can be done at a small scale, it is not tractable for the larger scales where mOTUpan can still function (as is stated on its web-page\footnote{\href{https://sanger-pathogens.github.io/Roary/}{https://sanger-pathogens.github.io/Roary/}} ``Roary is not intended for meta-genomics or for comparing extremely diverse sets of genomes’'').
+
+Running mOTUpan using the COGs generated by PPanGGOLiN (which internally uses the mmseq2\citep{gautreau_2020} clustering tool), we obtain similar core-genome estimates for the GTDB data-set (the more complete genome-sets) (Fig.\ref{fig:ppanggolin}A). Looking more specifically at the deviation from the first bisector along the completeness scale (Fig.\ref{fig:ppanggolin}B), we can see that in general PPanGGOLiN’s core-genome estimates are larger than those obtained with mOTUpan for the more complete genome-sets. This tendency changes drastically once the average completeness drops below 70\% where the mOTUpan estimates become larger. This increase could be due to an inflation of predicted core gene-clusters for the more incomplete genome-sets. We accounted for this possibility by inspecting the fraction of the genome classified as core (Fig.\ref{fig:ppanggolin}C). While this estimate is expected to be independent of completeness, we can see that output from both PPanGGOLiN and mOTUpan drop away from the expected value with lower completeness, but the output from PPanGGOLiN drops faster, demonstrating mOTUpan’s robustness to incomplete and noisy genomes.
+
+\subsection*{Benchmarking mOTUpan against PPanGGOLiN for a \textit{Prochlorococcus\_A} genome-set}
+
+For a more detailed benchmarking of mOTUpan against PPanGGOLiN, we used a set of 388 genomes from the \textit{Prochlorococcus\_A} genus, ranging in completeness from 8.59\% to 99.52\% (median=69.05\%) according to CheckM (Supplementary Table S2).  For this analysis we used the gene-clusters generated by PPanGGOLiN.
+
+PPanGGOLiN splits the set of  gene-clusters by default into three subsets: persistent, shell and cloud. For very complete genomes, the persistent set of gene-clusters is close to the core-genome, but for more noisy genomes, such as those included in this \textit{Prochlorococcus\_A} genome-set, the approach is not capturing the entire core-genome (Fig.\ref{fig:rarefy}). It is notable that gene-clusters identified as ``persistent'' (316 gene-clusters) very likelily belong to the core-genome while the ``shell''-set of genes will normally correspond to frequently co-occurring genes. PPanGGOLiN estimates a total of 1537 gene-clusters to be a part of the ``shell'' category for the \textit{Prochlorococcus\_A} gene-set. For the same gene-set, mOTUpan estimates 1637 gene-clusters to be part of the core-genome. The core estimate of mOTUpan seems to be close to the sum of ``persistent'' and ``shell'' (1853 gene-clusters). The three closed genomes have 1883 gene-clusters, making the ``persistent+shell'' estimate probably an overestimate of the core-genome. The ``shell'' set of gene-clusters is picking up genes that are probably not all from the core but rather frequently occurring accessory operons. This is shown in the heatmap in Fig.\ref{fig:heatmap}. Conversely, it also shows the robustness of mOTUpan to estimate the true core-genome from more noisy mOTUs.
+
+Calculations of the core-genome using mOTUpan with the 3 closed genomes and 16 genomes with completeness higher than 95\% of the \textit{Prochlorococcus\_A} cluster estimates 1644 gene-clusters in the core (1714 ``persistent'' gene-clusters with PPanGGOLiN). This is probably an upper-bound to the size of the core of this \textit{Prochlorococcus\_A} mOTU, as additional micro-diversity and noise would only remove genes from this, making the 1637 gene-clusters predicted to make up the core in mOTUpan for the full set a better estimate than either PPanGGOLiN’s ``shell''-set (316 clusters) or ``persistent+shell''-set (1853 clusters).
+
+This generally shows that mOTUpan can predict a core-genome very similar to other state-of-the-art tools, while at the same time being more robust over broader ranges of genome completeness in comparison to those tools.
+
+mOTUpan can be used in a number of ways. It can obviously be used to study pan-genome structure at large scale and with noisier data. This comes with some caveats, i.e. the method is highly dependent on the gene-clustering method used and it is very hard to evaluate the correctness of these at a larger scale. Additionally, mOTUpan can only classify genes that actually are in the genomes that are analyzed. Accordingly,  genes that are hard to assemble or bin (due to different k-mer or abundance profiles) will be overlooked, leading to an inevitable underestimate of the accessory genomes. Nevertheless, it is the only tool available that can do this type of analysis, and should hence be an invaluable resource for biodiversity exploration and comparative genomics. While PPanGGoLiN is performing very well with noisy data, the specific purpose and scope of this tool is different. PPanGGoLiN can be leveraged if one needs to select and identify core genes to e.g. make a core phylogeny, but mOTUpan is a better choice for estimating and exploring the core-  and/or accessory genome structure.
+Another important use envisioned for mOTUpan is to strengthen functional predictions for metagenomic projects. Rather than relying on single MAGs where the presence of specific genes can be questioned, mOTUpan can robustly quantify this presence as long as highly similar MAGs are available (which is often the case in medium-to-large scale metagenomic project). Notably, it can be used with a variety of genome-encoded traits, and the currently available version has parsers available for: Roary, PPanGGoLiN, eggNOGmapper\citep{cantalapiedra_2021}, and mmseqs2\citep{steinegger_2017}, with possibly more to be included later.
+
+Ultimately, mOTUpan introduces and enables a new type of analysis within the field of microbial genomics, i.e. the usage of presence-absence of genome-encoded traits combined with some Bayesian computation to predict gene-content in a genome-set. This approach can be expanded into a number of different directions. We can for example move from presence-absence to gene-count, or use this approach for gene-linkage assessment to estimate if some traits co-occur more often than by chance.
+
+\section*{Acknowledgments}
+
+Bioinformatics analyses were carried out utilizing the Uppsala Multidisciplinary Center for Advanced Computational Science (UPPMAX) at Uppsala University under projects SNIC 2020/5-19 and 2021/5-53. Funding was provided by the Swedish Research Council (grant 2017-04422 and 2018-04685). Also big thanks to Julia Nuy and Matthias Hötzinger for some early testing.
+
+\section*{Data and code availability}
+The mOTUpan software is written in Python 3 and is freely available under GPL 3.0 license via GitHub in the mOTUlizer package at \href{github.com/moritzbuck/mOTUlizer}{github.com/moritzbuck/mOTUlizer}. A conda recipe and pip package for user friendly installation are also available in the appropriate repository. Scripts used for the analyses in this paper can be found at \href{github.com/moritzbuck/mOTUlizer/tree/master/mOTUlizer/scripts}{github.com/moritzbuck/mOTUlizer/tree/master/mOTUlizer/scripts}
+The data used for benchmarking is from the GTDB\citep{parks_2020}(release 95), available at gtdb.ecogenomic.org (with actual genomes at RefSeq and Genbank); GORG-Tropics\cite{pachiadaki_2019}, available under GenBank at PRJEB33281; and the StratFreshDB\citep{buck_2021a}
+
+\bibliography{bibliography.bib}
+
+
+\begin{figure}
+  \makebox[\textwidth][c]{\includegraphics{figs/Fig_1_flat}}
+	\caption[mOTUpan vs. roary]
+	{	\label{fig:roary}Benchmarking the performance of mOTUpan against Roary along the completeness scale. 301 species containing 11570 genomes from the genome taxonomy database (GTDB) and 258 mOTUs containing 8955 genomes in total from the StratfreshDB are used for this comparison. Gene-clusters used are the ones computed by Roary. A) Predicted core sizes. B) normalized residues, fold change between core size predicted by mOTUpan and roary, if the number is larger than one, mOTUpan’s prediction is larger. C) Fraction of genome made of gene-clusters in the core.}
+\end{figure}
+
+\begin{figure}
+	\makebox[\textwidth][c]{\includegraphics{figs/Fig_2_flat}}
+	\caption[mOTUpan vs. PPanGGOLiN]
+	{Benchmarking the performance of mOTUpan against PPanGGOLiN along the completeness scale. 301 mOTUs containing 11570 genomes from the genome taxonomy database (GTDB) and 258 mOTUs containing 8955 genomes in total from the StratfreshDB were used for this comparison. Gene-clusters used are the ones computed by PpanGGOLiN (based on mmseqs2). A) Predicted core sizes. B) normalized residues, fold change between core size predicted by mOTUpan and Roary, if the number is larger than one, mOTUpan’s prediction is larger. C) Fraction of genome made of gene-clusters in the core.}
+	\label{fig:ppanggolin}
+\end{figure}
+
+\begin{figure}
+	\centering
+	\includegraphics{figs/Fig_3_flat}
+	\caption[Prochlorococcus_A rarefaction]
+	{Rarefaction analysis of mOTUpan’s and PPanGGOLin’s core-genome prediction on the \textit{Prochlorococcus\_A} mOTU. The same analysis was performed on random subsets of the available 388 genomes.}
+	\label{fig:rarefy}
+\end{figure}
+
+\begin{figure}
+	\centering
+	\includegraphics{figs/Fig_4_flat_crop}
+	\caption[Prochlorococcus_A heatmap of traits]
+	{Distribution of 5985 generated gene-clusters in 388 genomes of a \textit{Prochlorococcus\_A} mOTU. Columns are genomes, and rows represent gene-clusters. Gene-clusters are assigned to different partitions using mOTUpan and PPanGGOLiN estimations (colored columns on the left). The gene-clusters, that mOTUpan called as accessory and PPanGGOLiN called as shell, seem to belong to blocks of gene-clusters absent in sets of highly complete genomes, hinting at very prevalent operons of accessory genes.  Conversely gene-clusters in mOTUpan’s accessory and PPanGGoLiN’s shell, seem to be very prevalent gene-clusters that have only a diffuse pattern hinting at single mobile genes, for example.}
+	\label{fig:heatmap}
+\end{figure}
+
+\end{document}
