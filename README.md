@@ -110,3 +110,13 @@ mOTUpan.py --cog_file OUTPUT
 ```
 
 In the `example_files`-folder a number of example input and output file are available.
+
+## Citing and additional doc
+
+Preprint for mOTUpan available on [bioRxiv](https://www.biorxiv.org/content/10.1101/2021.06.25.449606v1.full):
+
+>mOTUpan: a robust Bayesian approach to leverage metagenome assembled genomes for core-genome estimation
+>Moritz Buck, Maliheh Mehrshad, and Stefan Bertilsson
+>bioRxiv 2021.06.25.449606; doi: https://doi.org/10.1101/2021.06.25.449606
+
+A draft of a `release note` for mOTUlize is in the doc-folder, as well as the source of the previously mentioned mOTUpan paper and some slides
