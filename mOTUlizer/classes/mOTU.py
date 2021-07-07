@@ -8,6 +8,7 @@ from random import shuffle, choice, choices
 from math import log10
 import sys
 import json
+from mOTUlizer import __version__
 
 
 mean = lambda x : sum(x)/len(x)
@@ -67,7 +68,7 @@ class mOTU:
 
 
     def roc_values(self, boots):
-        if boots > 0:
+        if boots > 0 or len(self.mock) >0 :
             from mOTUlizer.classes.MockData import MockmOTU
             mean = lambda data: float(sum(data)/len(data))
             variance 	= lambda data, avg: sum([x**2 for x in [i-avg for i in data]])/float(len(data))
@@ -90,14 +91,17 @@ class mOTU:
                      'mean_fpr' : mean([m.fpr for m in self.mock]),
                      'sd_fpr' : std_dev([m.fpr for m in self.mock]),
                      'mean_lowest_false' : mean([m.lowest_false for m in self.mock]),
-                     'sd_lowest_false' : std_dev([m.lowest_false for m in self.mock])}
+                     'sd_lowest_false' : std_dev([m.lowest_false for m in self.mock]),
+                     'nb_bootstraps' : len(self.mock)
+                     }
         else:
             return { 'mean_recall' : "NA",
                      'sd_recall' : "NA",
                      'mean_fpr' : "NA",
                      'sd_fpr' : "NA",
                      'mean_lowest_false' : "NA",
-                     'sd_lowest_false' : "NA"}
+                     'sd_lowest_false' : "NA",
+                     'nb_bootstraps' : 0}
 
 
     def avg_cog_content(self):
@@ -291,6 +295,78 @@ class mOTU:
         self.aa2cog = None
         self.likelies = None
         self.cog_dict = None
+
+    def pretty_pan_table(self):
+
+        out_dict = {}
+        stats = self.get_stats()
+        stats = list(stats.values())[0]
+        stats.update(self.roc_values(boots = len(self.mock)))
+        cogs = set([cc for g,c in stats['cogs'].items() for cc in c]) if 'aa' not in stats['cogs'] else set(stats['cogs']['aa'].values())
+        for k in cogs:
+            out_dict[k] = {}
+            out_dict[k]['type'] = 'core' if k in stats['core'] else 'accessory'
+            out_dict[k]['genome_occurences'] = 0
+            out_dict[k]['log_likelihood_to_be_core'] = stats['likelies'][k]
+            out_dict[k]['genomes'] = []
+            out_dict[k]['genes'] = [] if 'aa' in stats['cogs'] else ["NA"]
+            out_dict[k]['trait_name'] = k
+        if 'aa' in stats['cogs']:
+            for k,v in stats['cogs']['aa'].items():
+                out_dict[v]['genes'] += [k]
+        for k,v in stats['cogs'].items() if 'aa' not in stats['cogs'] else stats['cogs']['genome'].items():
+            for vv in v:
+                out_dict[vv]['genomes'] += [k]
+                out_dict[vv]['genome_occurences'] += 1
+
+        for k,v in out_dict.items():
+            v['mean_copy_per_genome'] = "NA" if not v['genes'] else len(v['genes'])/len(v['genomes'])
+            v['genes'] = ";".join(v['genes'])
+            v['genomes'] = ";".join(v['genomes'])
+
+        header = ['trait_name','type', 'genome_occurences', 'log_likelihood_to_be_core', 'mean_copy_per_genome','genomes', 'genes']
+        genome_line = "genomes=" + ";".join(["{}:prior_complete={}:posterior_complete={}".format(k['name'], k['checkm_complet'], k['new_completness']) for k in stats['genomes']])
+        mean = lambda l : sum([ll for ll in l])/len(l)
+
+        if stats['mean_recall'] != "NA":
+            bootsy = """
+#bootstrapped_mean_false_positive_rate={fpr:.2f};bootstrapped_sd_false_positive_rate={sd_fpr:.2f}
+#bootstrapped_mean_recall={recall:.2f};bootstrapped_sd_recall={sd_recall:.2f}
+#bootstrapped_mean_lowest_false_positive={lowest:.2f};bootstrapped_sd_lowest_false_positive={sd_lowest:.2f}
+#bootstrapped_nb_reps={boots}
+#""".format( boots=self.mock,
+            fpr=stats['mean_fpr'],
+            recall = stats['mean_recall'], lowest = stats['mean_lowest_false'],sd_fpr=stats['sd_fpr'],
+            sd_recall = stats['sd_recall'], sd_lowest = stats['sd_lowest_false'])
+        else :
+            bootsy=""
+
+
+        outformat ="""#mOTUlizer:mOTUpan:{version}
+#run_name={name}
+#
+#genome_count={nb}
+#core_length={core_len}
+#mean_prior_completeness={prior_complete:.2f}
+#mean_posterior_completeness={post_complete:.2f}
+#sum_abs_loglikelihood_ratios={SALLHR:.2f}
+#mean_est_genome_size={size:.2f};traits_per_genome
+#{genomes}
+#{boostrap}
+{header}
+{data}
+"""
+        return outformat.format(version = __version__ , nb = stats['nb_genomes'],
+            name = self.name.strip("_"),
+            core_len = len(self.core),
+            genomes=genome_line,
+            prior_complete=mean([b.checkm_complet for b in self]),
+            post_complete=mean([b.new_completness for b in self]),
+            SALLHR=sum([l if l > 0 else -l for l in self.likelies.values()]),
+            size=mean([100*len(b.cogs)/b.new_completness for b in self]),
+            boostrap=bootsy,
+            header = "\t".join(header), data = "\n".join(["\t".join([str(v[hh]) for hh in header]) for v in out_dict.values()]))
+
 
     @classmethod
     def cluster_MetaBins(cls , all_bins, dist_dict, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_contamin = 5, sub_complete = 0, sub_contamin = 100):
