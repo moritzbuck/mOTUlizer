@@ -166,16 +166,10 @@ if __name__ == '__main__':
     groupB.add_argument(*anvio.A('output-file'), **anvio.K('output-file'))
     groupB.add_argument(*anvio.A('store-in-db'), **anvio.K('store-in-db'))
 
-    groupC = parser.add_argument_group('SELECTION', "Which gene clusters should be analyzed. You can ask for a single gene cluster,\
-                                       or multiple ones listed in a file, or you can use a collection and bin name to list gene clusters\
-                                       of interest.")
-    groupC.add_argument(*anvio.A('collection-name'), **anvio.K('collection-name'))
-    groupC.add_argument(*anvio.A('bin-id'), **anvio.K('bin-id'))
-
-    groupD = parser.add_argument_group('OPTIONAL',"Optional stuff available for you to use")
-    groupD.add_argument(*anvio.A('num-threads'), **anvio.K('num-threads'))
-    groupD.add_argument(*anvio.A('just-do-it'), **anvio.K('just-do-it'))
-    groupD.add_argument( '-B', '--num-bootstraps' , metavar = "NUM_BOOTSTRAPS", default = 0, type = int, help = "number of boostraps run on the partitioning to evaluate it's quality"  )
+    groupC = parser.add_argument_group('OPTIONAL',"Optional stuff available for you to use")
+    groupC.add_argument(*anvio.A('num-threads'), **anvio.K('num-threads'))
+    groupC.add_argument(*anvio.A('just-do-it'), **anvio.K('just-do-it'))
+    groupC.add_argument('-B', '--num-bootstraps' , metavar = "NUM_BOOTSTRAPS", default = 0, type = int, help = "number of boostraps run on the partitioning to evaluate it's quality"  )
 
     args = parser.get_args(parser)
 
