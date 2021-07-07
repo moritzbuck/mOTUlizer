@@ -33,8 +33,8 @@ __maintainer__ = "Moritz Buck"
 __email__ = "moritz.buck@slu.se"
 __requires__ = ["pan-db", "genomes-storage-db"]
 __provides__ = []
-__resources__ = [("mOTUpan github", "https://github.com/moritzbuck/mOTUlizer/")]
-__description__ = "runs mOTUpan for your genome-set"
+__resources__ = [("GitHub repository for the mOTUPan", "https://github.com/moritzbuck/mOTUlizer/")]
+__description__ = "Runs mOTUpan on your gene clusters to estimate whether they are core or accessory"
 
 
 run = terminal.Run()
