@@ -113,18 +113,17 @@ def main(args):
     if args.num_bootstraps :
         motu.roc_values(boots=args.num_bootstraps)
     if args.store_in_db:
-        data2add = { g : {'partition' : 'core' if g in motu.core else 'accessory', 'log_likelihood_ratio' : motu.likelies[g]} for g in all_gene_clusters}
+        data2add = {g: {'Gene_cluster_type' : 'CORE' if g in motu.core else 'ACCESSORY', 'Gene_cluster_type_LLR' : motu.likelies[g]} for g in pan.gene_cluster_names}
         panditional_data = TableForItemAdditionalData(args)
-        panditional_data.add(data2add, data_keys_list = ['partition','log_likelihood_ratio'])
+        panditional_data.add(data2add, data_keys_list=['Gene_cluster_type', 'Gene_cluster_type_LLR'])
 
     if args.output_file:
         with open(args.output_file, "w") as handle:
             print(motu.pretty_pan_table(), file = handle)
-        run.info("Output file", args.output_file, mc="green")
+        run.info("Output file", args.output_file, mc="green", nl_before=1)
 
-    if args.num_bootstraps > 0 :
+    if args.num_bootstraps > 0:
         print(motu.roc_values(0))
-#        run.info("test test", value = , mc="green")
 
 
 if __name__ == '__main__':
