@@ -60,6 +60,44 @@ def main(args):
     genome_completeness_dict = {g: v.get('percent_completion', None) for g, v in genome_storage.genomes_info.items()}
     genome_lengths_dict = {g: v.get('total_length', None) for g, v in genome_storage.genomes_info.items()}
 
+    # a heuristic if there are genomes missing completeness estimates
+    genomes_with_missing_completeness_data = [g for g in genome_completeness_dict if genome_completeness_dict[g] in [None, -1]]
+    if genomes_with_missing_completeness_data:
+        run.warning(f"Please read this carefully as {len(genomes_with_missing_completeness_data)} of your {len(genome_completeness_dict)} "
+                    f"of your genomes are missing completion estimates. This may be due to multiple reasons: you may have not run the anvi'o "
+                    f"program `anvi-run-hmms` on your contigs databases before generating the genome storage database. Or, some of your "
+                    f"genomes may be too incomplete to have proper copmletion estimates. To continue this workflow, this prgram will something "
+                    f"a bit tacky: it will find the genomes with highest completion value, and assign a completion value for the genomes in "
+                    f"in your collection that are lacking completion estimates based on how their lenghts compare to the lenght of the genome "
+                    f"with a known completion estimate. This indeed is a pretty brutal approximation to an optimal solution, but this is quite "
+                    f"an unoptimal situation at the first place. Here are the list of genomes that makes you read this warning: "
+                    f"{', '.join(genomes_with_missing_completeness_data)}.", header="PLEASE NOTE MISSING COMPLETION VALUES")
+
+        highest_completion_value = sorted(genome_completeness_dict.items(), key=lambda x:x[1], reverse=True)[0][1]
+
+        if not highest_completion_value or highest_completion_value < 50:
+            raise ConfigError('Bad news :( Your most highly complete genome is less than 50% complete. This is futile.')
+
+        # here we turn this value into an integer, so we can recruit more genomes. I.e., if a genome is 99.5 and another
+        # is 99.1, it is best to take the average of their lenghts rather than just using the most complete one since
+        # all these thigns are so arbitrary
+        highest_completion_value = int(highest_completion_value)
+
+        # subest the highly complete genomes nad learn their average lenghts:
+        highly_complete_genomes = [g for g in genome_completeness_dict if genome_completeness_dict[g] > highest_completion_value]
+        highly_complete_genome_lengths = [genome_lengths_dict[g] for g in highly_complete_genomes]
+        avg_length_for_highly_complete_genomes = sum(highly_complete_genome_lengths) / len(highly_complete_genome_lengths)
+
+        # update missing completion estimates
+        for genome_name in genomes_with_missing_completeness_data:
+            new_completion_value = genome_lengths_dict[genome_name] / avg_length_for_highly_complete_genomes * highest_completion_value
+            genome_completeness_dict[genome_name] = 100 if new_completion_value > 100 else new_completion_value
+
+        # let the user know what just happened
+        run.warning(f"Missing completion values for {len(genomes_with_missing_completeness_data)} genomes are now "
+                    f"recovered based on the the lengths and completion values of these genomes: "
+                    f"{', '.join(highly_complete_genomes)}", header="MISSING COMPLETION VALUES RECOVERED", lc="green")
+
     # initialize gene clusters
     pan.init_gene_clusters()
 
@@ -68,14 +106,6 @@ def main(args):
     for gc, hits in pan.gene_clusters.items():
         for genome, genes in hits.items():
             if len(genes) > 0:
-    completess = { 'empty' : None }
-    if pan.genomes_storage_is_available:
-        genome_storage = genomestorage.GenomeStorage(pan.genomes_storage_path, run=terminal.Run(verbose=False))
-        completess = { g : v.get('percent_completion', None) for g,v in genome_storage.genomes_info.items()}
-
-    if any([v is None for v in completess.values()]):
-        run.warning("Lol. You are running mOTUpan wihout prior completeness estimate. This is probably either because you didn't run anvi-run-scg-something or you run this wihout genome-storage. It's ok, we will use the longest genome as '100%' complete and the completeness of the others with be estimated by their relative lenghts to that one. It might be a bit worse, but you'll get new completnesses as estiamted by mOTUpan anyhow!", lc="green")
-        completess = "length_seed"
                 gene_clusters_dict[genome].add(gc)
 
 
