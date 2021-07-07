@@ -118,10 +118,25 @@ def main(args):
             if len(genes) > 0:
                 gene_clusters_dict[genome].add(gc)
 
+    # bleep bloop
+    run.warning(f"Anvi'o is now using {__citation__} to identify gene clusters in your pangenome based on whether they are "
+                f"core or accessory through a Bayesian calculation. If you have used the `--store-in-db` flag, this program "
+                f"will add two new layers to your pan database: 'Gene_cluster_type' (i.e., whether a given gene cluster is "
+                f"accessor or core) and 'Gene_cluster_type_LLR' (the log likelihood ratio of that assessment). When you "
+                f"publish your findings, please do not forget to properly credit this work.", lc='green', header="CITATION")
 
-    motu = mOTU( name = "mOTUpan_core_prediction" , faas = {} , cog_dict = genome2genecluster, checkm_dict = completess, max_it = 100, threads = args.num_threads, precluster = False, method = 'default')
+    motu = mOTU(name="mOTUpan_core_prediction",
+                faas={},
+                gene_clusters_dict=gene_clusters_dict,
+                genome_completion_dict=genome_completeness_dict,
+                max_it=100,
+                threads=args.num_threads,
+                precluster=False,
+                method='default')
+
     if args.num_bootstraps :
         motu.roc_values(boots=args.num_bootstraps)
+
     if args.store_in_db:
         data2add = {g: {'Gene_cluster_type' : 'CORE' if g in motu.core else 'ACCESSORY', 'Gene_cluster_type_LLR' : motu.likelies[g]} for g in pan.gene_cluster_names}
         panditional_data = TableForItemAdditionalData(args)
