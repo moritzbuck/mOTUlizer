@@ -1,8 +1,6 @@
 import abc
 from tqdm import tqdm
 import sys
-import h5py
-import hdf5plugin
 
 class Parser(metaclass=abc.ABCMeta):
 
@@ -118,6 +116,50 @@ class PPanGGolinParse(Parser):
             return {k : {vv : v.count(vv) for vv in set(v)} for k,v in genome2family.items()}
         else :
             return {k : list(set(v)) for k,v in genome2family.items()}
+
+
+class AnvioParse(Parser):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        try :
+            import anvio.dbops as dbops
+        except :
+            print("""
+            To parse anvi'o's pangenome database you will need to have anvio installed
+            for now at least, until I move my ass and just dig in the SQLite stuff...
+            But if you have a pangenome database, you probably have anvio installed anyhow.
+            Otherwise, best check the anvi'o install page :
+                    https://merenlab.org/2016/06/26/installation-v2/
+            """, file = sys.stderr)
+            sys.exit(0)
+
+
+    def convert(self, infile, count = False):
+        class Mock:
+            def __init_(self):
+                self.__dict__ = {}
+        import anvio.dbops as dbops
+        args = Mock()
+        args.__dict__['pan_db'] = infile
+        pan = dbops.PanSuperclass(args)
+
+        gene_cluster_ids = pan.gene_cluster_names
+
+        pan.init_gene_clusters(gene_cluster_ids)
+        gene_cluster = set(pan.gene_clusters.keys())
+
+        genomes = {g for k,v in pan.gene_clusters.items() for g in v}
+        genome2genecluster = {g : [] for g in genomes}
+        for gc, hits in pan.gene_clusters.items():
+            for genome, genes in hits.items():
+                if len(genes) > 0:
+                    if gc not in genome2genecluster[genome]:
+                        genome2genecluster[genome].append(gc)
+        if count:
+            return {k : {vv : v.count(vv) for vv in set(v)} for k,v in genome2genecluster.items()}
+        else :
+            return {k : list(set(v)) for k,v in genome2genecluster.items()}
+
 
 class RoaryParse(Parser):
     def __init__(self, **kwargs):

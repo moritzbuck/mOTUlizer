@@ -9,7 +9,7 @@ import json
 from mOTUlizer import __version__
 
 from mOTUlizer.utils import *
-from mOTUlizer.classes.Parser import EmapperParse, PPanGGolinParse, RoaryParse, MmseqsParse
+from mOTUlizer.classes.Parser import EmapperParse, PPanGGolinParse, RoaryParse, MmseqsParse, AnvioParse
 
 description_text = """
 Converts output of diverse software generatig COGs, or genetically encoded traits into a genome2cog-JSON file useable by mOTUpan
@@ -33,6 +33,8 @@ mmseqs2 :
 \twhen running mmseq2 easy-cluster, where <o:cluster_Prefix> is the output prefix you give to
 \tthe command.
 
+anvi'o :
+\textracts the gene-clusters from a pangenome-database
 
 """
 
@@ -47,6 +49,8 @@ def motuconvert(args):
         converter = RoaryParse()
     elif method == "mmseqs2":
         converter = MmseqsParse()
+    elif method == "anvio":
+        converter = AnvioParse()
     else :
         print("This is not implemented yet run with '--list' to see available options", file = sys.stderr )
         sys.exit(0)
