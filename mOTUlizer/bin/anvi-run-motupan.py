@@ -30,6 +30,7 @@ __description__ = "runs mOTUpan for your genome-set"
 run = terminal.Run()
 progress = terminal.Progress()
 
+
 def main(args):
     if not args.output_file and not args.store_in_db:
         if args.just_do_it:
@@ -43,22 +44,30 @@ def main(args):
     if args.output_file:
         filesnpaths.is_output_file_writable(args.output_file)
 
-    gene_cluster_ids = set([])
     pan = dbops.PanSuperclass(args, r=terminal.Run(verbose=False))
-    gene_cluster_ids = pan.gene_cluster_names
 
-    run.warning("You did not specify which gene clusters to work with, so anvi'o will work with all %d gene "
-                "clusters found in the pan database." % len(gene_cluster_ids))
+    # get a pan instance
     pan = dbops.PanSuperclass(args)
-    pan.init_gene_clusters(gene_cluster_ids)
-    gene_cluster = set(pan.gene_clusters.keys())
-    genomes = {g for k,v in pan.gene_clusters.items() for g in v}
-    genome2genecluster = {g : set() for g in genomes}
+
+    # complain if there is no genomes storage
+    if not pan.genomes_storage_is_available:
+        raise ConfigError("The anvi'o pan class does not see a genomes storage. No genomes storage no cake.")
+
+    # get a genome storage instance
+    genome_storage = genomestorage.GenomeStorage(pan.genomes_storage_path, run=terminal.Run(verbose=False))
+
+    # recover genome completeness values
+    genome_completeness_dict = {g: v.get('percent_completion', None) for g, v in genome_storage.genomes_info.items()}
+    genome_lengths_dict = {g: v.get('total_length', None) for g, v in genome_storage.genomes_info.items()}
+
+    # initialize gene clusters
+    pan.init_gene_clusters()
+
+    # build the gene clusters dict for mOTU
+    gene_clusters_dict = {g : set() for g in pan.genome_names}
     for gc, hits in pan.gene_clusters.items():
         for genome, genes in hits.items():
             if len(genes) > 0:
-                genome2genecluster[genome].add(gc)
-    all_gene_clusters = { vv for v in genome2genecluster.values() for vv in v}
     completess = { 'empty' : None }
     if pan.genomes_storage_is_available:
         genome_storage = genomestorage.GenomeStorage(pan.genomes_storage_path, run=terminal.Run(verbose=False))
@@ -67,6 +76,8 @@ def main(args):
     if any([v is None for v in completess.values()]):
         run.warning("Lol. You are running mOTUpan wihout prior completeness estimate. This is probably either because you didn't run anvi-run-scg-something or you run this wihout genome-storage. It's ok, we will use the longest genome as '100%' complete and the completeness of the others with be estimated by their relative lenghts to that one. It might be a bit worse, but you'll get new completnesses as estiamted by mOTUpan anyhow!", lc="green")
         completess = "length_seed"
+                gene_clusters_dict[genome].add(gc)
+
 
     motu = mOTU( name = "mOTUpan_core_prediction" , faas = {} , cog_dict = genome2genecluster, checkm_dict = completess, max_it = 100, threads = args.num_threads, precluster = False, method = 'default')
     if args.num_bootstraps :
