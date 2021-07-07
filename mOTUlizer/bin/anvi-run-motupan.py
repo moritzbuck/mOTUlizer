@@ -13,6 +13,16 @@ from anvio.argparse import ArgumentParser
 from anvio.errors import ConfigError, FilesNPathsError
 from anvio.tables.miscdata import TableForItemAdditionalData
 
+__citation__ = "'mOTUlizer' by Buck et al (https://doi.org/10.1101/2021.06.25.449606)"
+
+try:
+    from mOTUlizer.classes.mOTU import mOTU
+except ModuleNotFoundError:
+    raise ConfigError(f"{__citation__} does not seem to be installed on your system as anvi'o was "
+                      f"unable to import its Python libraries :( In theory you should be able to install "
+                      f"mOTUlizer by running the following command in your anvi'o environment: pip install "
+                      f"mOTUlizer. Please visit the URL https://github.com/moritzbuck/mOTUlizer to read most "
+                      f"up-to-date installation instructions or to report issues. Thank you for your patience!")
 
 __author__ = "Developers of anvi'o (see AUTHORS.txt)"
 __copyright__ = "Copyleft 2015-2018, the Meren Lab (http://merenlab.org/)"
