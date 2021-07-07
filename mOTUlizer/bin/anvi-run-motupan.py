@@ -2,20 +2,17 @@
 # -*- coding: utf-8
 
 import sys
-from anvio.argparse import ArgumentParser
 
 import anvio
 import anvio.dbops as dbops
-import anvio.utils as utils
 import anvio.terminal as terminal
-import anvio.summarizer as summarizer
-import anvio.genomestorage as genomestorage
 import anvio.filesnpaths as filesnpaths
-import anvio.tables.miscdata as miscdata
+import anvio.genomestorage as genomestorage
 
+from anvio.argparse import ArgumentParser
 from anvio.errors import ConfigError, FilesNPathsError
 from anvio.tables.miscdata import TableForItemAdditionalData
-from mOTUlizer.classes.mOTU import mOTU
+
 
 __author__ = "Developers of anvi'o (see AUTHORS.txt)"
 __copyright__ = "Copyleft 2015-2018, the Meren Lab (http://merenlab.org/)"
