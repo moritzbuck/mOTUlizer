@@ -8,7 +8,7 @@ genome2guass = {}
 
 class MockmOTU(mOTU):
     def __repr__(self) :
-        return "< MockmOTU with {n} genomes, of average {c}% completness, with core/genome_len of {r} >".format(c = 100*self.mean_completeness, n = len(self), r = self.ratio)
+        return "< MockmOTU with {n} genomes, of average {c}% completness>".format(c = 100*self.mean_completeness, n = len(self))
 
     def __init__(self, name, core_len, nb_genomes, completeness, max_it = 20, accessory = None, method = None):
 

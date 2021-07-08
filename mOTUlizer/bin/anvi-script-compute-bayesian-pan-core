@@ -136,6 +136,10 @@ def main(args):
 
     if args.num_bootstraps :
         motu.roc_values(boots=args.num_bootstraps)
+        rocs = motu.roc_values(0)
+        run.warning("You ran the bootstrap option for the pangenome predition, if you have no output file the results are only shown here :", lc = "gray")
+        for k,v in rocs.items() :
+            run.info(k,"{:.2f}".format(v) if k != 'nb_bootstraps' else v, lc = "gray")
 
     if args.store_in_db:
         data2add = {g: {'Gene_cluster_type' : 'CORE' if g in motu.core else 'ACCESSORY', 'Gene_cluster_type_LLR' : motu.likelies[g]} for g in pan.gene_cluster_names}
@@ -147,8 +151,6 @@ def main(args):
             print(motu.pretty_pan_table(), file = handle)
         run.info("Output file", args.output_file, mc="green", nl_before=1)
 
-    if args.num_bootstraps > 0:
-        print(motu.roc_values(0))
 
 
 if __name__ == '__main__':

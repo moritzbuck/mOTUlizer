@@ -242,8 +242,13 @@ class mOTU:
                 core_len = new_core_len
 
         if not self.quiet:
-            json.dump({ self.name : {"nb_mags" : len(self), "core_len" : core_len, "mean_starting_completeness" :  mean([b.checkm_complet for b in self]), "mean_new_completness" : mean([b.new_completness for b in self]), "LHR"  :  sum([l if l > 0 else -l for l in likelies.values()]), "mean_est_binsize" : mean([100*len(b.gene_clusterss)/b.new_completness for b in self])}}, sys.stderr )
-            print(file = sys.stderr)
+            pp =  "\nYour {name}-run for {nb_mags} genomes (with mean initial completeness {mean_start:.2f}) resulted\n"
+            pp += "in a core of {core_len} traits with a total sum of loglikelihood-ratios {llhr:.2f} and a corrected \n"
+            pp += "mean completness of {mean_new:.2f}, resulting to a estimated mean traits per genome count of {trait_count:.2f}\n"
+            pp = pp.format(name = self.name, nb_mags = len(self), core_len = core_len, mean_start = mean([b.checkm_complet for b in self]),
+                        mean_new =  mean([b.new_completness for b in self]), llhr =  sum([l if l > 0 else -l for l in likelies.values()]),
+                        trait_count = mean([100*len(b.gene_clusterss)/b.new_completness for b in self]))
+            print(pp, file = sys.stderr)
         self.iterations = i -1
         return likelies
 
