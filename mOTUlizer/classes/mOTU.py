@@ -24,39 +24,39 @@ class mOTU:
         self.quiet = kwargs['quiet'] if "quiet" in kwargs else False
         self.likelies = None
         self.mock = []
-        if "cog_dict" in kwargs:
+        if "gene_clusters_dict" in kwargs:
             self.__for_mOTUpan(**kwargs)
 
         if "bins" in kwargs:
             self.__from_bins(**kwargs)
 
 
-    def __for_mOTUpan(self, name, faas, cog_dict, checkm_dict, threads = 4, precluster = False, max_it = 20, method = None, quiet=False):
+    def __for_mOTUpan(self, name, faas, gene_clusters_dict, genome_completion_dict, threads = 4, precluster = False, max_it = 20, method = None, quiet=False):
         self.name = name
         self.faas = faas
         if not quiet:
             print("Creating mOTU for mOTUpan", file = sys.stderr)
-        if  not cog_dict :
+        if  not gene_clusters_dict :
             tt = compute_COGs(self.faas, name = name, precluster = precluster, threads = threads)
-            self.cog_dict = tt['genome2cogs']
+            self.gene_clusters_dict = tt['genome2cogs']
             self.aa2cog = tt['aa2cog']
         else :
-            self.cog_dict = cog_dict
+            self.gene_clusters_dict = gene_clusters_dict
             self.aa2cog = {}
 
-        if checkm_dict == "length_seed" :
-            max_len = max([len(cogs) for cogs in self.cog_dict.values()])
-            checkm_dict = {}
-            for f in self.cog_dict:
-                checkm_dict[f] = 100*len(self.cog_dict[f])/max_len
+        if genome_completion_dict == "length_seed" :
+            max_len = max([len(cogs) for cogs in self.gene_clusters_dict.values()])
+            genome_completion_dict = {}
+            for f in self.gene_clusters_dict:
+                genome_completion_dict[f] = 100*len(self.gene_clusters_dict[f])/max_len
 
-        self.members = [MetaBin(bin_name, cogs = self.cog_dict[bin_name], faas = self.faas.get(bin_name), fnas = None, complet = checkm_dict.get(bin_name)) for bin_name in self.cog_dict.keys()]
+        self.members = [MetaBin(bin_name, cogs = self.gene_clusters_dict[bin_name], faas = self.faas.get(bin_name), fnas = None, complet = genome_completion_dict.get(bin_name)) for bin_name in self.gene_clusters_dict.keys()]
         self.cogCounts = {c : 0 for c in set.union(set([cog for mag in self.members for cog in mag.cogs]))}
         for mag in self.members:
             for cog in mag.cogs:
                     self.cogCounts[cog] += 1
 
-        self.core = {cog for cog, counts in self.cogCounts.items() if (100*counts/len(self)) > mean(checkm_dict.values())}
+        self.core = {cog for cog, counts in self.cogCounts.items() if (100*counts/len(self)) > mean(genome_completion_dict.values())}
 
         self.method = method
         if self.method :
@@ -166,7 +166,7 @@ class mOTU:
         "core" : list(self.core) if self.core else None,
         "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core] if self.core else None ,
         "singleton_cogs" : [k for k,v in self.cogCounts.items() if k not in self.core if v == 1] if self.core else None,
-        "cogs" : None if self.cog_dict is None else {'genome' : {k : list(v) for k,v in self.cog_dict.items()}, 'aa' : self.aa2cog} if self.aa2cog else ({k : list(v) for k,v  in self.cog_dict.items()} if self.cog_dict else None),
+        "cogs" : None if self.gene_clusters_dict is None else {'genome' : {k : list(v) for k,v in self.gene_clusters_dict.items()}, 'aa' : self.aa2cog} if self.aa2cog else ({k : list(v) for k,v  in self.gene_clusters_dict.items()} if self.gene_clusters_dict else None),
         "mean_ANI" : self.get_mean_ani() if (hasattr(self, 'fastani_dict') or all([hasattr(g, "genome") for g in self])) else None,
         "ANIs" : [[k[0], k[1], v] for k, v in self.fastani_matrix().items()] if (hasattr(self, 'fastani_dict')  or all([hasattr(g, "genome") for g in self])) else None,
         "genomes" : [v.get_data() for v in self],
@@ -294,7 +294,7 @@ class mOTU:
         self.fastani_dict = dist_dict
         self.aa2cog = None
         self.likelies = None
-        self.cog_dict = None
+        self.gene_clusters_dict = None
 
     def pretty_pan_table(self):
 
