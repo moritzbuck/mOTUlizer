@@ -106,7 +106,7 @@ def motulize(args):
 
     print("making bin-objects", file = sys.stderr)
 
-    all_bins = [MetaBin(name = g, cogs = None, faas = None, fnas = fnas[g], complet = checkm_info[g]['Completeness'], contamin = checkm_info[g]['Contamination'], max_complete = 100) for g in genomes]
+    all_bins = [MetaBin(name = g, gene_clusterss = None, faas = None, fnas = fnas[g], complet = checkm_info[g]['Completeness'], contamin = checkm_info[g]['Contamination'], max_complete = 100) for g in genomes]
 
     if dist_dict is None:
         print("Similarities not provided, will compute them with fastANI", file = sys.stderr)

@@ -38,25 +38,25 @@ class mOTU:
             print("Creating mOTU for mOTUpan", file = sys.stderr)
         if  not gene_clusters_dict :
             tt = compute_COGs(self.faas, name = name, precluster = precluster, threads = threads)
-            self.gene_clusters_dict = tt['genome2cogs']
-            self.aa2cog = tt['aa2cog']
+            self.gene_clusters_dict = tt['genome2gene_clusterss']
+            self.aa2gene_clusters = tt['aa2gene_clusters']
         else :
             self.gene_clusters_dict = gene_clusters_dict
-            self.aa2cog = {}
+            self.aa2gene_clusters = {}
 
         if genome_completion_dict == "length_seed" :
-            max_len = max([len(cogs) for cogs in self.gene_clusters_dict.values()])
+            max_len = max([len(gene_clusterss) for gene_clusterss in self.gene_clusters_dict.values()])
             genome_completion_dict = {}
             for f in self.gene_clusters_dict:
                 genome_completion_dict[f] = 100*len(self.gene_clusters_dict[f])/max_len
 
-        self.members = [MetaBin(bin_name, cogs = self.gene_clusters_dict[bin_name], faas = self.faas.get(bin_name), fnas = None, complet = genome_completion_dict.get(bin_name)) for bin_name in self.gene_clusters_dict.keys()]
-        self.cogCounts = {c : 0 for c in set.union(set([cog for mag in self.members for cog in mag.cogs]))}
+        self.members = [MetaBin(bin_name, gene_clusterss = self.gene_clusters_dict[bin_name], faas = self.faas.get(bin_name), fnas = None, complet = genome_completion_dict.get(bin_name)) for bin_name in self.gene_clusters_dict.keys()]
+        self.gene_clustersCounts = {c : 0 for c in set.union(set([gene_clusters for mag in self.members for gene_clusters in mag.gene_clusterss]))}
         for mag in self.members:
-            for cog in mag.cogs:
-                    self.cogCounts[cog] += 1
+            for gene_clusters in mag.gene_clusterss:
+                    self.gene_clustersCounts[gene_clusters] += 1
 
-        self.core = {cog for cog, counts in self.cogCounts.items() if (100*counts/len(self)) > mean(genome_completion_dict.values())}
+        self.core = {gene_clusters for gene_clusters, counts in self.gene_clustersCounts.items() if (100*counts/len(self)) > mean(genome_completion_dict.values())}
 
         self.method = method
         if self.method :
@@ -78,7 +78,7 @@ class mOTU:
                 print("Running bootstrap {}/{}".format(len(self.mock)+1, boots), file = sys.stderr)
                 completnesses = {"Genome_{}".format(i) : c.new_completness for i,c in enumerate(self)}
 
-                accessory = sorted([v for k,v in self.cogCounts.items() if k not in self.core])
+                accessory = sorted([v for k,v in self.gene_clustersCounts.items() if k not in self.core])
                 missing = int(sum(accessory)*(1-mean(list(completnesses.values()))/100))
                 if len(accessory) > 0:
                     addeds = choices(list(range(len(accessory))), weights = accessory, k = missing)
@@ -104,8 +104,8 @@ class mOTU:
                      'nb_bootstraps' : 0}
 
 
-    def avg_cog_content(self):
-        return sum([len(m.cogs) for m in self.members])/len(self)
+    def avg_gene_clusters_content(self):
+        return sum([len(m.gene_clusterss) for m in self.members])/len(self)
 
     def consensus_tax(self):
         taxos = [bin.taxonomy for bin in self.members]
@@ -126,7 +126,7 @@ class mOTU:
 
     def overlap_matrix(self):
         if not hasattr(self, 'overlap_dict'):
-            self.overlap_dict = {(i,j) : len(i.overlap(j))/len(i.cogs) for i in self.members for j in self.members if i != j}
+            self.overlap_dict = {(i,j) : len(i.overlap(j))/len(i.gene_clusterss) for i in self.members for j in self.members if i != j}
         return self.overlap_dict
 
     def mean_overlap(self) :
@@ -164,9 +164,9 @@ class mOTU:
 
         out[self.name] = { "nb_genomes" : len(self),
         "core" : list(self.core) if self.core else None,
-        "aux_genome" : [k for k,v in self.cogCounts.items() if k not in self.core] if self.core else None ,
-        "singleton_cogs" : [k for k,v in self.cogCounts.items() if k not in self.core if v == 1] if self.core else None,
-        "cogs" : None if self.gene_clusters_dict is None else {'genome' : {k : list(v) for k,v in self.gene_clusters_dict.items()}, 'aa' : self.aa2cog} if self.aa2cog else ({k : list(v) for k,v  in self.gene_clusters_dict.items()} if self.gene_clusters_dict else None),
+        "aux_genome" : [k for k,v in self.gene_clustersCounts.items() if k not in self.core] if self.core else None ,
+        "singleton_gene_clusterss" : [k for k,v in self.gene_clustersCounts.items() if k not in self.core if v == 1] if self.core else None,
+        "gene_clusterss" : None if self.gene_clusters_dict is None else {'genome' : {k : list(v) for k,v in self.gene_clusters_dict.items()}, 'aa' : self.aa2gene_clusters} if self.aa2gene_clusters else ({k : list(v) for k,v  in self.gene_clusters_dict.items()} if self.gene_clusters_dict else None),
         "mean_ANI" : self.get_mean_ani() if (hasattr(self, 'fastani_dict') or all([hasattr(g, "genome") for g in self])) else None,
         "ANIs" : [[k[0], k[1], v] for k, v in self.fastani_matrix().items()] if (hasattr(self, 'fastani_dict')  or all([hasattr(g, "genome") for g in self])) else None,
         "genomes" : [v.get_data() for v in self],
@@ -209,7 +209,7 @@ class mOTU:
         return {'mean_ANI' : sum([d for d in dists if d])/len(found_edges) if len(found_edges) > 0 else None, 'missing_edges' : missing_edges, 'total_edges' : len(found_edges) + missing_edges}
 
     def __core_likelyhood(self, max_it = 20, likeli_cutof = 0 ):
-        likelies = {cog : self.__core_likely(cog) for cog in self.cogCounts}
+        likelies = {gene_clusters : self.__core_likely(gene_clusters) for gene_clusters in self.gene_clustersCounts}
         self.core = set([c for c, v in likelies.items() if v > likeli_cutof])
         core_len = len(self.core)
         i = 1
@@ -217,19 +217,19 @@ class mOTU:
             print("iteration 1 : ", core_len, "sum_abs_LLHR:" , sum([l if l > 0 else -l for l in likelies.values()]), file = sys.stderr)
         for mag in self:
             if len(self.core) > 0:
-                mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
+                mag.new_completness = 100*len(mag.gene_clusterss.intersection(self.core))/len(self.core)
             else :
                 mag.new_completness = 0
             mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
             mag.new_completness = mag.new_completness if mag.new_completness > 0 else 0.01
         for i in range(2,max_it):
-            likelies = {cog : self.__core_likely(cog, complet = "new", core_size = core_len) for cog in self.cogCounts}
+            likelies = {gene_clusters : self.__core_likely(gene_clusters, complet = "new", core_size = core_len) for gene_clusters in self.gene_clustersCounts}
             old_core = self.core
             self.core = set([c for c, v in likelies.items() if v > likeli_cutof])
             new_core_len = len(self.core)
             for mag in self:
                 if len(self.core) > 0:
-                    mag.new_completness = 100*len(mag.cogs.intersection(self.core))/len(self.core)
+                    mag.new_completness = 100*len(mag.gene_clusterss.intersection(self.core))/len(self.core)
                 else :
                     mag.new_completness = 0
                 mag.new_completness = mag.new_completness if mag.new_completness < 99.9 else 99.9
@@ -242,48 +242,48 @@ class mOTU:
                 core_len = new_core_len
 
         if not self.quiet:
-            json.dump({ self.name : {"nb_mags" : len(self), "core_len" : core_len, "mean_starting_completeness" :  mean([b.checkm_complet for b in self]), "mean_new_completness" : mean([b.new_completness for b in self]), "LHR"  :  sum([l if l > 0 else -l for l in likelies.values()]), "mean_est_binsize" : mean([100*len(b.cogs)/b.new_completness for b in self])}}, sys.stderr )
+            json.dump({ self.name : {"nb_mags" : len(self), "core_len" : core_len, "mean_starting_completeness" :  mean([b.checkm_complet for b in self]), "mean_new_completness" : mean([b.new_completness for b in self]), "LHR"  :  sum([l if l > 0 else -l for l in likelies.values()]), "mean_est_binsize" : mean([100*len(b.gene_clusterss)/b.new_completness for b in self])}}, sys.stderr )
             print(file = sys.stderr)
         self.iterations = i -1
         return likelies
 
-    def __core_prob(self, cog, complet = "checkm"):
+    def __core_prob(self, gene_clusters, complet = "checkm"):
         comp = lambda mag : (mag.checkm_complet if complet =="checkm" else mag.new_completness)/100
-        presence = [log10(comp(mag)) for mag in self if cog in mag.cogs]
-        abscence = [log10(1 - comp(mag)) for mag in self if cog not in mag.cogs]
+        presence = [log10(comp(mag)) for mag in self if gene_clusters in mag.gene_clusterss]
+        abscence = [log10(1 - comp(mag)) for mag in self if gene_clusters not in mag.gene_clusterss]
         return sum(presence + abscence)
 
-    def __pange_prob(self, cog, core_size, complet = "checkm"):
-#        pool_size = sum(self.cogCounts.values())
-        pool_size = sum([c for k,c in  self.cogCounts.items()])
+    def __pange_prob(self, gene_clusters, core_size, complet = "checkm"):
+#        pool_size = sum(self.gene_clustersCounts.values())
+        pool_size = sum([c for k,c in  self.gene_clustersCounts.items()])
         comp = lambda mag : (mag.checkm_complet if complet =="checkm" else mag.new_completness)/100
-        #presence = [1 - (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog in mag.cogs]
-        #abscence = [ (1-self.cogCounts[cog]/pool_size)**(len(mag.cogs)-(core_size*comp(mag))) for mag in self if cog not in mag.cogs]
+        #presence = [1 - (1-self.gene_clustersCounts[gene_clusters]/pool_size)**(len(mag.gene_clusterss)-(core_size*comp(mag))) for mag in self if gene_clusters in mag.gene_clusterss]
+        #abscence = [ (1-self.gene_clustersCounts[gene_clusters]/pool_size)**(len(mag.gene_clusterss)-(core_size*comp(mag))) for mag in self if gene_clusters not in mag.gene_clusterss]
 
-#        mag_prob = {mag : ( 1-1/pool_size )**len(mag.cogs) for mag in self}
-#        mag_prob = {mag : ( 1-1/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
-#        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
+#        mag_prob = {mag : ( 1-1/pool_size )**len(mag.gene_clusterss) for mag in self}
+#        mag_prob = {mag : ( 1-1/pool_size )**(len(mag.gene_clusterss)-(core_size*comp(mag))) for mag in self}
+#        mag_prob = {mag : ( 1-self.gene_clustersCounts[gene_clusters]/pool_size )**(len(mag.gene_clusterss)-(core_size*comp(mag))) for mag in self}
 
-#        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size )**(len(mag.cogs)-(core_size*comp(mag))) for mag in self}
-        mag_prob = {mag : ( 1-self.cogCounts[cog]/pool_size)**len(mag.cogs) for mag in self}
+#        mag_prob = {mag : ( 1-self.gene_clustersCounts[gene_clusters]/pool_size )**(len(mag.gene_clusterss)-(core_size*comp(mag))) for mag in self}
+        mag_prob = {mag : ( 1-self.gene_clustersCounts[gene_clusters]/pool_size)**len(mag.gene_clusterss) for mag in self}
 
-        presence = [ log10(1 -   mag_prob[mag]) if mag_prob[mag] < 1 else MIN_PROB                for mag in self if cog in mag.cogs]
-        abscence = [ log10(      mag_prob[mag]) if mag_prob[mag] > 0 else log10(1-(10**MIN_PROB)) for mag in self if cog not in mag.cogs]
+        presence = [ log10(1 -   mag_prob[mag]) if mag_prob[mag] < 1 else MIN_PROB                for mag in self if gene_clusters in mag.gene_clusterss]
+        abscence = [ log10(      mag_prob[mag]) if mag_prob[mag] > 0 else log10(1-(10**MIN_PROB)) for mag in self if gene_clusters not in mag.gene_clusterss]
 
-        #abscence = [ 1-self.cogCounts[cog]/len(self)*comp(mag) for mag in self if cog not in mag.cogs]
-        #presence = [ self.cogCounts[cog]/len(self)*comp(mag) for mag in self if cog not in mag.cogs]
+        #abscence = [ 1-self.gene_clustersCounts[gene_clusters]/len(self)*comp(mag) for mag in self if gene_clusters not in mag.gene_clusterss]
+        #presence = [ self.gene_clustersCounts[gene_clusters]/len(self)*comp(mag) for mag in self if gene_clusters not in mag.gene_clusterss]
 
         return sum(presence + abscence)
 
-    def __core_likely(self, cog, complet = "checkm", core_size = 0):
-        pange_prob = self.__pange_prob(cog, core_size, complet)
-        return self.__core_prob(cog, complet) - pange_prob
+    def __core_likely(self, gene_clusters, complet = "checkm", core_size = 0):
+        pange_prob = self.__pange_prob(gene_clusters, core_size, complet)
+        return self.__core_prob(gene_clusters, complet) - pange_prob
 
-    def nb_cogs(self):
-        return mean([b.estimate_nb_cogs() for b in self if b.new_completness > 40 ])
+    def nb_gene_clusterss(self):
+        return mean([b.estimate_nb_gene_clusterss() for b in self if b.new_completness > 40 ])
 
     def get_pangenome_size(self, singletons = False):
-        return len([k for k,v in self.cogCounts.items() if k not in self.core and v > (0 if singletons else 1)])
+        return len([k for k,v in self.gene_clustersCounts.items() if k not in self.core and v > (0 if singletons else 1)])
 
 
     def __from_bins(self, bins, name,dist_dict = None ):
@@ -292,7 +292,7 @@ class mOTU:
         self.members = bins
         self.core = None
         self.fastani_dict = dist_dict
-        self.aa2cog = None
+        self.aa2gene_clusters = None
         self.likelies = None
         self.gene_clusters_dict = None
 
@@ -302,19 +302,19 @@ class mOTU:
         stats = self.get_stats()
         stats = list(stats.values())[0]
         stats.update(self.roc_values(boots = len(self.mock)))
-        cogs = set([cc for g,c in stats['cogs'].items() for cc in c]) if 'aa' not in stats['cogs'] else set(stats['cogs']['aa'].values())
-        for k in cogs:
+        gene_clusterss = set([cc for g,c in stats['gene_clusterss'].items() for cc in c]) if 'aa' not in stats['gene_clusterss'] else set(stats['gene_clusterss']['aa'].values())
+        for k in gene_clusterss:
             out_dict[k] = {}
             out_dict[k]['type'] = 'core' if k in stats['core'] else 'accessory'
             out_dict[k]['genome_occurences'] = 0
             out_dict[k]['log_likelihood_to_be_core'] = stats['likelies'][k]
             out_dict[k]['genomes'] = []
-            out_dict[k]['genes'] = [] if 'aa' in stats['cogs'] else ["NA"]
+            out_dict[k]['genes'] = [] if 'aa' in stats['gene_clusterss'] else ["NA"]
             out_dict[k]['trait_name'] = k
-        if 'aa' in stats['cogs']:
-            for k,v in stats['cogs']['aa'].items():
+        if 'aa' in stats['gene_clusterss']:
+            for k,v in stats['gene_clusterss']['aa'].items():
                 out_dict[v]['genes'] += [k]
-        for k,v in stats['cogs'].items() if 'aa' not in stats['cogs'] else stats['cogs']['genome'].items():
+        for k,v in stats['gene_clusterss'].items() if 'aa' not in stats['gene_clusterss'] else stats['gene_clusterss']['genome'].items():
             for vv in v:
                 out_dict[vv]['genomes'] += [k]
                 out_dict[vv]['genome_occurences'] += 1
@@ -363,7 +363,7 @@ class mOTU:
             prior_complete=mean([b.checkm_complet for b in self]),
             post_complete=mean([b.new_completness for b in self]),
             SALLHR=sum([l if l > 0 else -l for l in self.likelies.values()]),
-            size=mean([100*len(b.cogs)/b.new_completness for b in self]),
+            size=mean([100*len(b.gene_clusterss)/b.new_completness for b in self]),
             boostrap=bootsy,
             header = "\t".join(header), data = "\n".join(["\t".join([str(v[hh]) for hh in header]) for v in out_dict.values()]))
 

@@ -12,7 +12,7 @@ from mOTUlizer.utils import *
 from mOTUlizer.classes.Parser import EmapperParse, PPanGGolinParse, RoaryParse, MmseqsParse, AnvioParse
 
 description_text = """
-Converts output of diverse software generatig COGs, or genetically encoded traits into a genome2cog-JSON file useable by mOTUpan
+Converts output of diverse software generatig COGs, or genetically encoded traits into a genome2gene_clusters-JSON file useable by mOTUpan
 """
 
 list_text = """
@@ -55,14 +55,14 @@ def motuconvert(args):
         print("This is not implemented yet run with '--list' to see available options", file = sys.stderr )
         sys.exit(0)
 
-    genome2cogs = converter.convert(infile = args.input, count = args.count)
+    genome2gene_clusterss = converter.convert(infile = args.input, count = args.count)
 
     if args.output:
         out_handle = open(out_json, "w")
     else :
         out_handle = sys.stdout
 
-    json.dump(genome2cogs, out_handle, indent=4, sort_keys=True)
+    json.dump(genome2gene_clusterss, out_handle, indent=4, sort_keys=True)
 
     if args.output:
         out_handle.close()

@@ -13,7 +13,7 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
 
     temp_folder = tempfile.mkdtemp(prefix = name)
     all_faas_file = pjoin(temp_folder, "concat.faa")
-    cog2rep = None
+    gene_clusters2rep = None
     prot_ids = set()
     prot2faa ={}
     for k,v in faas.items():
@@ -92,10 +92,10 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
         fill = max([len(v) for v in recs.values()])
         recs = {k : name + "_" + v.zfill(fill) for k, v in recs.items()}
 
-        genome2cog = {k : set() for k in faas.keys()}
+        genome2gene_clusters = {k : set() for k in faas.keys()}
         for k,v in recs.items():
             for vv in prot2faa[k]:
-                genome2cog[vv].update([v])
+                genome2gene_clusters[vv].update([v])
 
     elif method == "mmseqsCluster" :
         "coverage = 80% with cov-mode = 0, minimal amino acid sequence identity = 80% and cluster-mode = 0"
@@ -120,15 +120,15 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
         fill = len(str(len(set(recs.values()))))
 
         rep2clust = {k : name + str(i).zfill(fill) for i,k in enumerate(set(recs.values()))}
-        cog2rep = {v: k for k,v in rep2clust.items()}
+        gene_clusters2rep = {v: k for k,v in rep2clust.items()}
 
-        print("For", len(recs), "CDSes we got ", len(cog2rep), " gene-clusters", file = sys.stderr)
+        print("For", len(recs), "CDSes we got ", len(gene_clusters2rep), " gene-clusters", file = sys.stderr)
 
         recs = {k : rep2clust[v] for k, v in recs.items()}
-        genome2cog = {k : set() for k in faas.keys()}
+        genome2gene_clusters = {k : set() for k in faas.keys()}
         for k,v in recs.items():
             for vv in prot2faa[k]:
-                genome2cog[vv].update([v])
+                genome2gene_clusters[vv].update([v])
 
     else :
         print("The '{}' clustering method is not implemented yet".format(name) , file = sys.stderr)
@@ -138,9 +138,9 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
 
     shutil.rmtree(temp_folder)
 
-    for k,v in genome2cog.items():
-        genome2cog[k] = set(v)
+    for k,v in genome2gene_clusters.items():
+        genome2gene_clusters[k] = set(v)
 
 
 
-    return { 'genome2cogs' : genome2cog, 'aa2cog' : recs, 'cog2rep' : cog2rep}
+    return { 'genome2gene_clusterss' : genome2gene_clusters, 'aa2gene_clusters' : recs, 'gene_clusters2rep' : gene_clusters2rep}

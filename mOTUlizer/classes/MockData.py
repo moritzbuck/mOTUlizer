@@ -51,7 +51,7 @@ class MockmOTU(mOTU):
         self.real_core_len = core_len
 
         zerifneg = lambda g: 0.001 if g < 0 else g
-        super().__init__(name = name, faas = {}, cog_dict = self.incompletes, checkm_dict = { k : zerifneg(normal(v, 10)) for k,v in self.completenesses.items()}, max_it = max_it, method = method, quiet=True)
+        super().__init__(name = name, faas = {}, gene_clusters_dict = self.incompletes, genome_completion_dict = { k : zerifneg(normal(v, 10)) for k,v in self.completenesses.items()}, max_it = max_it, method = method, quiet=True)
         if core_len == 0:
             self.recall = "NA"
             self.fpr = "NA"
@@ -59,11 +59,11 @@ class MockmOTU(mOTU):
             self.recall = len(core.intersection(self.core))/core_len
             self.fpr = sum([not c.startswith("CoreTrait_") for c in self.core])/len([not c.startswith("CoreTrait_") for c in self.core])
 
-        self.lowest_false = {k : v for k,v in self.cogCounts.items() if k in self.core and k not in core}
+        self.lowest_false = {k : v for k,v in self.gene_clustersCounts.items() if k in self.core and k not in core}
         self.lowest_false = 1 if(len(self.lowest_false) ==0) else min(self.lowest_false.items(), key = lambda x : x[1])[1]/len(self)
 
 
-    def mock_cog_stats(self):
+    def mock_gene_clusters_stats(self):
         all_genes = set.union(*self.incompletes.values())
         outp = {t : {} for t in all_genes}
         for t,dd  in outp.items():

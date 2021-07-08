@@ -8,11 +8,11 @@ from mOTUlizer.config import FASTA_EXTS
 
 class MetaBin:
     def __repr__(self) :
-        return "< bin {name} with {n} cogs>".format(n = len(self.cogs) if cogs else "NA", name = self.name)
+        return "< bin {name} with {n} gene_clusterss>".format(n = len(self.gene_clusterss) if gene_clusterss else "NA", name = self.name)
 
-    def __init__(self, name, cogs,fnas, faas, complet = None, contamin = 0, max_complete = 99.9):
+    def __init__(self, name, gene_clusterss,fnas, faas, complet = None, contamin = 0, max_complete = 99.9):
         self.name = name
-        self.cogs = cogs if type(cogs) != str else set([cogs])
+        self.gene_clusterss = gene_clusterss if type(gene_clusterss) != str else set([gene_clusterss])
         self.faas = faas
         self.fnas = fnas
         self.checkm_complet = complet
@@ -33,11 +33,11 @@ class MetaBin:
 
 
     def overlap(self, target):
-        return self.cogs.intersection(target.cogs)
+        return self.gene_clusterss.intersection(target.gene_clusterss)
 
-    def estimate_nb_cogs(self):
+    def estimate_nb_gene_clusterss(self):
         assert self.new_completness != None, "new_completness not computed, please do"
-        return 100*len(self.cogs)/self.new_completness
+        return 100*len(self.gene_clusterss)/self.new_completness
 
     @classmethod
     def get_anis(cls, bins, outfile = None, method = "fastANI", block_size = 500, threads=1):

@@ -89,7 +89,7 @@ def process_species(liss, tax, sett ="gtdb", subset = None):
         for p in paths:
             shutil.copy(p, "temp/")
         paths = [pjoin("temp", g) for g in os.listdir("temp") ]
-        checkm_dict = { "_".join(k.split("_")[1:]) : r95.loc[k, "checkm_completeness"]  for k in liss}
+        genome_completion_dict = { "_".join(k.split("_")[1:]) : r95.loc[k, "checkm_completeness"]  for k in liss}
     if sett == "stratfreshdb":
         pat = "/home/moritz/data/data_submit/bins"
         paths = [make_folder2(g, g.split("_")[0], pat) for g in liss]
@@ -100,7 +100,7 @@ def process_species(liss, tax, sett ="gtdb", subset = None):
             pp =  pp.replace(ass + "/" , ass + "/" + gid + "/").replace(".tar.gz", ".fna.gz")
             call("tar -C temp --strip-components=3 -vxzf  {tar} {pp} -C temp/  > /dev/null 2> /dev/null".format(tar = p, pp = pp), shell=True)
             call("tar -C temp --strip-components=3 -vxzf  {tar} {pp} -C temp/  > /dev/null 2> /dev/null".format(tar = p, pp = pp).replace(".fna.gz", ".gff.gz"), shell=True)
-        checkm_dict = { k : stratfresh.loc[k, "completeness"]  for k in liss}
+        genome_completion_dict = { k : stratfresh.loc[k, "completeness"]  for k in liss}
     for f in os.listdir("temp"):
         call("unpigz temp/" + f, shell=True)
 
@@ -115,35 +115,35 @@ def process_species(liss, tax, sett ="gtdb", subset = None):
 
     call("""
     ppanggolin workflow --anno temp_gff.list  -o temp/ --basename temp --tmpdir temp/ -c 20 -f -K 3 > /dev/null 2> /dev/null
-    python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin temp/temp.h5 > temp/ppanggolin.gid2cog 2> /dev/null
+    python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin temp/temp.h5 > temp/ppanggolin.gid2gene_clusters 2> /dev/null
     """, shell = True)
 
     print("running roary")
     call("""
     roary -p 22 -o temp/roary.txt  -cd 1 -v temp/*.gff > /dev/null 2> /dev/null
     mv accessory* blast_identity_frequency.Rtab  core_accessory* gene_presence_absence.* number_of_* summary_statistics.txt temp
-    python ../../mOTUlizer/bin/mOTUconvert.py --in_type roary temp/roary.txt > temp/roary.gid2cog  2> /dev/null
+    python ../../mOTUlizer/bin/mOTUconvert.py --in_type roary temp/roary.txt > temp/roary.gid2gene_clusters  2> /dev/null
 
     """,
     shell = True)
 
     print("running mOTUpan with ppanggolin")
-    if os.stat("temp/ppanggolin.gid2cog").st_size > 0 :
-        with open("temp/ppanggolin.gid2cog") as handle:
-            ppan_cogs = { k : set(v) for k,v in json.load(handle).items()}
-        motu = mOTU( name =  "temp" , faas = ppan_cogs, cog_dict = ppan_cogs, checkm_dict = checkm_dict, max_it = 20, threads = 20, precluster = False, method = "default")
+    if os.stat("temp/ppanggolin.gid2gene_clusters").st_size > 0 :
+        with open("temp/ppanggolin.gid2gene_clusters") as handle:
+            ppan_gene_clusterss = { k : set(v) for k,v in json.load(handle).items()}
+        motu = mOTU( name =  "temp" , faas = ppan_gene_clusterss, gene_clusters_dict = ppan_gene_clusterss, genome_completion_dict = genome_completion_dict, max_it = 20, threads = 20, precluster = False, method = "default")
         ppan_motupan_core = motu.core
         motu2=motu
         print("running mOTUpan with roary")
 
-        with open("temp/roary.gid2cog") as handle:
-            roary_cogs = { k : set(v) for k,v in json.load(handle).items()}
-        motu = mOTU( name =  "temp" , faas = roary_cogs, cog_dict = roary_cogs, checkm_dict = checkm_dict, max_it = 20, threads = 20, precluster = False, method = "default")
+        with open("temp/roary.gid2gene_clusters") as handle:
+            roary_gene_clusterss = { k : set(v) for k,v in json.load(handle).items()}
+        motu = mOTU( name =  "temp" , faas = roary_gene_clusterss, gene_clusters_dict = roary_gene_clusterss, genome_completion_dict = genome_completion_dict, max_it = 20, threads = 20, precluster = False, method = "default")
         roary_motupan_core = motu.core
-        roary_core = [k for k,v in motu.cogCounts.items() if v > 0.95*len(roary_cogs)]
-        roary_shell = [k for k,v in motu.cogCounts.items() if v > 0.15*len(roary_cogs) and k not in roary_core]
+        roary_core = [k for k,v in motu.gene_clustersCounts.items() if v > 0.95*len(roary_gene_clusterss)]
+        roary_shell = [k for k,v in motu.gene_clustersCounts.items() if v > 0.15*len(roary_gene_clusterss) and k not in roary_core]
 
-    #    presabs = pandas.DataFrame().from_dict({k : {vv : 1.0 for vv in v} for k,v in  ppan_cogs.items()}, orient="index").fillna(0)
+    #    presabs = pandas.DataFrame().from_dict({k : {vv : 1.0 for vv in v} for k,v in  ppan_gene_clusterss.items()}, orient="index").fillna(0)
     #    ppangg2genome2gene = {k : {genome : [zz for zz in v if zz.startswith(genome)] for genome in set([vv.split("_CDS")[0] for vv in v])}  for k,v in ppang2gene.items()}
         handle = h5py.File("temp/temp.h5", "r")
         ppan_ppanggolin_core = {a[0].decode() for a in tqdm(handle['geneFamiliesInfo']) if a[1].decode() == "P"}
@@ -161,8 +161,8 @@ def process_species(liss, tax, sett ="gtdb", subset = None):
                 'ppanggolin_shell' : ppan_ppanggolin_shell,
                 'ppanggolin_core' : ppan_ppanggolin_core,
                 'new_completeness_roary' : [g.new_completness for g in motu],
-                'roary_cogs' : roary_cogs,
-                'ppan_cogs' : ppan_cogs,
+                'roary_gene_clusterss' : roary_gene_clusterss,
+                'ppan_gene_clusterss' : ppan_gene_clusterss,
                 'gids' : liss
                 }
     else :
@@ -186,8 +186,8 @@ def process_species_cores():
             type = "stratfreshdb" if k in sfdb_ids else "gtdb"
             tliss = sfdb_ids[k] if type =="stratfreshdb" else gids[k]
             scaffold_count = stratfresh.loc[tliss].nb_contigs if type =="stratfreshdb" else r95.loc[tliss].scaffold_count
-            new_comps_roary = {gid.replace("RS_","").replace("GB_","") : len(v['roary_cogs'][gid.replace("RS_","").replace("GB_","")].intersection(v['motupan_roary']))/len(v['motupan_roary'])  for gid in v['gids']}
-            new_comps_ppan = {gid.replace("RS_","").replace("GB_","") : len(v['ppan_cogs'][gid.replace("RS_","").replace("GB_","")].intersection(v['motupan']))/len(v['motupan'])  for gid in v['gids']}
+            new_comps_roary = {gid.replace("RS_","").replace("GB_","") : len(v['roary_gene_clusterss'][gid.replace("RS_","").replace("GB_","")].intersection(v['motupan_roary']))/len(v['motupan_roary'])  for gid in v['gids']}
+            new_comps_ppan = {gid.replace("RS_","").replace("GB_","") : len(v['ppan_gene_clusterss'][gid.replace("RS_","").replace("GB_","")].intersection(v['motupan']))/len(v['motupan'])  for gid in v['gids']}
 #            goods = set(goods)
             core_stats[k] = {
             'taxo' : k if type == "gtdb" else "tbd", #stratfresh_motus.loc[k].consensus_tax,
@@ -200,8 +200,8 @@ def process_species_cores():
             'nb_genomes' : len(v['gids']),
             'mean_completeness_ppan' : mean(v['new_completeness_ppan']),
             'mean_completeness_roary' : mean(v['new_completeness_roary']),
-            'mean_est_ppan_cogs' : mean([ len(v['ppan_cogs'][k])/c  for k,c in new_comps_roary.items() if c > 0.4] ),
-            'mean_est_roary_cogs' :  mean([ len(v['roary_cogs'][k])/c  for k,c in new_comps_ppan.items() if c > 0.4] ),
+            'mean_est_ppan_gene_clusterss' : mean([ len(v['ppan_gene_clusterss'][k])/c  for k,c in new_comps_roary.items() if c > 0.4] ),
+            'mean_est_roary_gene_clusterss' :  mean([ len(v['roary_gene_clusterss'][k])/c  for k,c in new_comps_ppan.items() if c > 0.4] ),
             'mean_scaff_count' : mean(scaffold_count),
             'type' : type,
 #            'est_size' :  r95.loc[gtdb2rep[k]].est_size if type == "gtdb" else  stratfresh_motus.loc[k].est_size
@@ -363,7 +363,7 @@ def running_tools():
 #    ppanggolin partition -K3 -f  -p static_data/ppanggolin_clusters.h5 --cpu 20
 #    ppanggolin rarefaction -c 20 --tmpdir . -K3 -f  --min 15 --depth 1 --max 1054 -o other_soft/ppanggolin/rarefaction -p static_data/ppanggolin_clusters.h5
 
-#    mOTUconvert.py --in_type ppanggolin static_data/ppanggolin_clusters.h5 > static_data/ppanggolin.gid2cog
+#    mOTUconvert.py --in_type ppanggolin static_data/ppanggolin_clusters.h5 > static_data/ppanggolin.gid2gene_clusters
 
     ppanggolin annotate --anno nucleotides/gff_list  -o static_data/ --basename ppanggolin_clusters_species --use_pseudo --tmpdir . -c 20 -f
     ppanggolin cluster -p static_data/ppanggolin_clusters_species.h5 -c 20 --tmpdir .
@@ -371,25 +371,25 @@ def running_tools():
     ppanggolin partition -K3 -f  -p static_data/ppanggolin_clusters_species.h5 --cpu 20
     ppanggolin rarefaction -c 20 --tmpdir . -K3 -f  --min 15 --depth 20 --max 10000 -o other_soft/ppanggolin/rarefaction_species -p static_data/ppanggolin_clusters_species.h5
 
-    python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin static_data/ppanggolin_clusters_species.h5 > static_data/ppanggolin_species.gid2cog
+    python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin static_data/ppanggolin_clusters_species.h5 > static_data/ppanggolin_species.gid2gene_clusters
 
     ppanggolin annotate --anno nucleotides/gff_list_fulls  -o static_data/ --basename ppanggolin_clusters_goods --use_pseudo --tmpdir . -c 20 -f
     ppanggolin cluster -p static_data/ppanggolin_clusters_goods.h5 -c 20 --tmpdir .
     ppanggolin graph -p static_data/ppanggolin_clusters_goods.h5 -c 20
     ppanggolin partition -K3 -f  -p static_data/ppanggolin_clusters_goods.h5 --cpu 20
 
-    python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin static_data/ppanggolin_clusters_goods.h5 > static_data/ppanggolin_goods.gid2cog
+    python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin static_data/ppanggolin_clusters_goods.h5 > static_data/ppanggolin_goods.gid2gene_clusters
 
     mkdir other_soft/roary/s__Prochlorococcus_A
     roary -p 22 -o other_soft/roary/s__Prochlorococcus_A_clusters.txt  -cd 1 -v `cat nucleotides/gff_list  | cut -f2`
     cp accessory* blast_identity_frequency.Rtab  core_accessory* gene_presence_absence.* number_of_* summary_statistics.txt other_soft/roary/s__Prochlorococcus_A
-    python ../../mOTUlizer/bin/mOTUconvert.py --in_type roary other_soft/roary/s__Prochlorococcus_A_clusters.txt > static_data/roary_s__Prochlorococcus_A.gid2cog
+    python ../../mOTUlizer/bin/mOTUconvert.py --in_type roary other_soft/roary/s__Prochlorococcus_A_clusters.txt > static_data/roary_s__Prochlorococcus_A.gid2gene_clusters
 
 
     mkdir other_soft/roary/goods
     roary -p 20 -o other_soft/roary/goods_clusters.txt  -cd 1 -v `cat nucleotides/gff_list_fulls  | cut -f2`
     mv accessory* blast_identity_frequency.Rtab  core_accessory* gene_presence_absence.* number_of_* summary_statistics.txt other_soft/roary/goods
-    mOTUconvert.py --in_type roary other_soft/roary/goods_clusters.txt > static_data/roary_goods.gid2cog
+    mOTUconvert.py --in_type roary other_soft/roary/goods_clusters.txt > static_data/roary_goods.gid2gene_clusters
 
     """, shell=True)
 
@@ -405,7 +405,7 @@ def get_genome_stats(g):
     return {'genome_len' : length, 'nb_contigs' : nb_contig}
 genome2stats = {g: get_genome_stats(g) for g in tqdm(genome2motu)}
 
-def run_motupan(genomes, gid2cog, name = "test" , k=15):
+def run_motupan(genomes, gid2gene_clusters, name = "test" , k=15):
     if k and k < len(genomes):
         kks = choices(genomes, k = k)
     else :
@@ -417,10 +417,10 @@ def run_motupan(genomes, gid2cog, name = "test" , k=15):
                 kks[i] = g +"#"+str(k_dups[g])
             k_dups[g] +=1
     faas_loc = {g : faas.get(g,faas[g.split("#")[0]])  for g in kks}
-    cog_dict = {k : gid2cog.get(k,gid2cog[k.split("#")[0]])  for  k in kks}
+    gene_clusters_dict = {k : gid2gene_clusters.get(k,gid2gene_clusters[k.split("#")[0]])  for  k in kks}
     checkm_loc = {g : checkm.get(g,checkm[g.split("#")[0]])['Completeness']  for g in kks}
     motu = None
-    motu = mOTU( name =  name , faas = faas_loc, cog_dict = cog_dict, checkm_dict = checkm_loc, max_it = 20, threads = 20, precluster = True, method = "default")
+    motu = mOTU( name =  name , faas = faas_loc, gene_clusters_dict = gene_clusters_dict, genome_completion_dict = checkm_loc, max_it = 20, threads = 20, precluster = True, method = "default")
     stats = motu.get_stats()
 #    roc = motu.roc_values()
     eff_genomes = sum([v for v in checkm_loc.values()])/100
@@ -460,25 +460,25 @@ def make_file_stats():
 
 def ppanggolin_vs_motulizer():
 
-    with open("static_data/ppanggolin_species.gid2cog") as handle:
-        gid2cog_species = json.load(handle)
-    gid2cog_species = {k : set(v) for k,v in gid2cog_species.items()}
-    j = list(range(15,len(gid2cog_species), 1))*5
-    def motupan_species_test_w_ppanggolin_cogs(i):
-        return run_motupan(p_As,k=j[i], gid2cog = gid2cog_species)
+    with open("static_data/ppanggolin_species.gid2gene_clusters") as handle:
+        gid2gene_clusters_species = json.load(handle)
+    gid2gene_clusters_species = {k : set(v) for k,v in gid2gene_clusters_species.items()}
+    j = list(range(15,len(gid2gene_clusters_species), 1))*5
+    def motupan_species_test_w_ppanggolin_gene_clusterss(i):
+        return run_motupan(p_As,k=j[i], gid2gene_clusters = gid2gene_clusters_species)
 
     motupan_ppanggolin_species = mOTU( name =  "motupan_ppanggolin_species" ,
-            faas = {g : v for g,v in faas.items() if g in gid2cog_species} ,
-            cog_dict = gid2cog_species,
-            checkm_dict = {g : checkm[g]['Completeness'] for g in gid2cog_species}, max_it = 20, method = "default")
+            faas = {g : v for g,v in faas.items() if g in gid2gene_clusters_species} ,
+            gene_clusters_dict = gid2gene_clusters_species,
+            genome_completion_dict = {g : checkm[g]['Completeness'] for g in gid2gene_clusters_species}, max_it = 20, method = "default")
 
 
     pool = Pool(processes=20)
-    motupan_species_rarefact_w_ppanggolin_cogs = pool.map(motupan_species_test_w_ppanggolin_cogs, list(range(len(j))))
-    with open("analyses/motupan_species_rarefact_w_ppanggolin_cogs.tsv", "w") as handle:
-        head = list(motupan_species_rarefact_w_ppanggolin_cogs[0].keys())
+    motupan_species_rarefact_w_ppanggolin_gene_clusterss = pool.map(motupan_species_test_w_ppanggolin_gene_clusterss, list(range(len(j))))
+    with open("analyses/motupan_species_rarefact_w_ppanggolin_gene_clusterss.tsv", "w") as handle:
+        head = list(motupan_species_rarefact_w_ppanggolin_gene_clusterss[0].keys())
         ppangg2genome2genehandle.writelines(["\t".join(head) + "\n"])
-        handle.writelines(["\t".join([str(l[k]) for k in head]) + "\n"  for l in motupan_species_rarefact_w_ppanggolin_cogs])
+        handle.writelines(["\t".join([str(l[k]) for k in head]) + "\n"  for l in motupan_species_rarefact_w_ppanggolin_gene_clusterss])
 
     handle = h5py.File("static_data/ppanggolin_clusters_species.h5", "r")
     gene2ppangg = {a.decode() : b.decode() for a,b in  tqdm(handle['geneFamilies'])}
@@ -493,60 +493,60 @@ def ppanggolin_vs_motulizer():
         ppanggolin_sets[k]['motupan'] = 'core' if k in motupan_ppanggolin_species.core else 'accessory'
 
 
-    ppanggolin_matrix = {gg : dict({k : 0 for k in gid2cog_species}) for g in gid2cog_species.values() for gg in g}
-    for k, gs in gid2cog_species.items():
+    ppanggolin_matrix = {gg : dict({k : 0 for k in gid2gene_clusters_species}) for g in gid2gene_clusters_species.values() for gg in g}
+    for k, gs in gid2gene_clusters_species.items():
         for gg in gs:
             ppanggolin_matrix[gg][k] = 1
 
-    pandas.DataFrame.from_dict(ppanggolin_sets, orient = "index").to_csv("analyses/ppanggolin_matrix_species_cogs.csv", index_label = "COG")
-    pandas.DataFrame.from_dict(ppanggolin_matrix, orient = "index").to_csv("analyses/ppanggolin_matrix_species.csv", index_label = "cog")
+    pandas.DataFrame.from_dict(ppanggolin_sets, orient = "index").to_csv("analyses/ppanggolin_matrix_species_gene_clusterss.csv", index_label = "COG")
+    pandas.DataFrame.from_dict(ppanggolin_matrix, orient = "index").to_csv("analyses/ppanggolin_matrix_species.csv", index_label = "gene_clusters")
     pandas.DataFrame.from_dict({g.name : {'motupan_completeness' : g.new_completness, 'checkm_completeness' : g.checkm_complet, **genome2stats[g.name]} for g in motupan_ppanggolin_species}, orient="index").to_csv("analyses/ppanggolin_matrix_species_genomes.csv", index_label = "genome")
 
 
 
-def pange_dict2roary_classes(gid2cog, mean_complete = 100):
+def pange_dict2roary_classes(gid2gene_clusters, mean_complete = 100):
     core_cutoff = 0.99*mean_complete/100
     softcore_cutoff = 0.95*mean_complete/100
     shell_cutoff = 0.15*mean_complete/100
     cloud_cutoff = 0
 
-    nb_genomes = len(gid2cog)
-    all_cog_counts = {vv : 0 for v in gid2cog.values() for vv in v}
+    nb_genomes = len(gid2gene_clusters)
+    all_gene_clusters_counts = {vv : 0 for v in gid2gene_clusters.values() for vv in v}
 
-    for v in gid2cog.values():
+    for v in gid2gene_clusters.values():
         for vv in v:
-            all_cog_counts[vv] += 1
+            all_gene_clusters_counts[vv] += 1
 
-    core = {k for k,v in all_cog_counts.items() if v/nb_genomes > core_cutoff}
+    core = {k for k,v in all_gene_clusters_counts.items() if v/nb_genomes > core_cutoff}
     for k in core:
-        del all_cog_counts[k]
+        del all_gene_clusters_counts[k]
 
-    softcore = {k for k,v in all_cog_counts.items() if v/nb_genomes > softcore_cutoff}
+    softcore = {k for k,v in all_gene_clusters_counts.items() if v/nb_genomes > softcore_cutoff}
     for k in softcore:
-        del all_cog_counts[k]
+        del all_gene_clusters_counts[k]
 
-    shell = {k for k,v in all_cog_counts.items() if v/nb_genomes > shell_cutoff}
+    shell = {k for k,v in all_gene_clusters_counts.items() if v/nb_genomes > shell_cutoff}
     for k in shell:
-        del all_cog_counts[k]
+        del all_gene_clusters_counts[k]
 
-    cloud = set(all_cog_counts.keys())
+    cloud = set(all_gene_clusters_counts.keys())
     return {'core' : len(core), 'softcore' : len(softcore), 'shell' : len(shell), 'cloud' : len(cloud) }
 
 def roary_vs_motupan():
-    with open("static_data/roary_goods.gid2cog") as handle:
-        roary_gi2cog = {k : set(v) for k, v in json.load(handle).items()}
+    with open("static_data/roary_goods.gid2gene_clusters") as handle:
+        roary_gi2gene_clusters = {k : set(v) for k, v in json.load(handle).items()}
         reps=20
         boots = []
-        for i in tqdm(range(3, len(roary_gi2cog))):
+        for i in tqdm(range(3, len(roary_gi2gene_clusters))):
             for j in range(reps):
-                sub_gid2cog = {k : roary_gi2cog[k] for k in choices(list(roary_gi2cog), k=i)}
-                est_complete = mean([checkm[k]['Completeness'] for k in sub_gid2cog])
-                tt = pange_dict2roary_classes(sub_gid2cog)
+                sub_gid2gene_clusters = {k : roary_gi2gene_clusters[k] for k in choices(list(roary_gi2gene_clusters), k=i)}
+                est_complete = mean([checkm[k]['Completeness'] for k in sub_gid2gene_clusters])
+                tt = pange_dict2roary_classes(sub_gid2gene_clusters)
                 tt['nb_org'] = i
                 tt['rep'] = j
                 tt['method'] = "strict"
                 tt['est_checkm_complete'] = est_complete
-                motupan = run_motupan(list(sub_gid2cog.keys()), k=i, gid2cog = sub_gid2cog)
+                motupan = run_motupan(list(sub_gid2gene_clusters.keys()), k=i, gid2gene_clusters = sub_gid2gene_clusters)
 
                 tt['motupan_est_checkm'] = motupan['mean_new_complete']
                 tt['motupan_core'] = motupan['core_len']
@@ -558,19 +558,19 @@ def roary_vs_motupan():
         with open("analyses/roary_rarefaction.csv", "w") as handle:
             handle.writelines([",".join(head) + "\n"] + [ ",".join([str(dd[k]) for k in head]) + '\n' for dd in boots])
 
-    with open("static_data/ppanggolin_goods.gid2cog") as handle:
-        ppanggolin_gi2cog = {k : set(v) for k, v in json.load(handle).items()}
+    with open("static_data/ppanggolin_goods.gid2gene_clusters") as handle:
+        ppanggolin_gi2gene_clusters = {k : set(v) for k, v in json.load(handle).items()}
         boots = []
-        for i in tqdm(range(3, len(ppanggolin_gi2cog))):
+        for i in tqdm(range(3, len(ppanggolin_gi2gene_clusters))):
             for j in range(reps):
-                sub_gid2cog = {k : ppanggolin_gi2cog[k] for k in choices(list(ppanggolin_gi2cog), k=i)}
-                est_complete = mean([checkm[k]['Completeness'] for k in sub_gid2cog])
-                tt = pange_dict2roary_classes(sub_gid2cog)
+                sub_gid2gene_clusters = {k : ppanggolin_gi2gene_clusters[k] for k in choices(list(ppanggolin_gi2gene_clusters), k=i)}
+                est_complete = mean([checkm[k]['Completeness'] for k in sub_gid2gene_clusters])
+                tt = pange_dict2roary_classes(sub_gid2gene_clusters)
                 tt['nb_org'] = i
                 tt['rep'] = j
                 tt['method'] = "strict"
                 tt['est_checkm_complete'] = est_complete
-                motupan = run_motupan(list(sub_gid2cog.keys()),k=i, gid2cog = sub_gid2cog)
+                motupan = run_motupan(list(sub_gid2gene_clusters.keys()),k=i, gid2gene_clusters = sub_gid2gene_clusters)
 
                 tt['motupan_est_checkm'] = motupan['mean_new_complete']
                 tt['motupan_core'] = motupan['core_len']
@@ -585,20 +585,20 @@ def roary_vs_motupan():
 
 
 def processing_goods():
-    with open("static_data/roary_goods.gid2cog") as handle:
+    with open("static_data/roary_goods.gid2gene_clusters") as handle:
         roary = {k : set(v) for k, v in json.load(handle).items()}
-    with open("static_data/ppanggolin_goods.gid2cog") as handle:
+    with open("static_data/ppanggolin_goods.gid2gene_clusters") as handle:
         ppanggolin = {k : set(v) for k, v in json.load(handle).items()}
 
     motupan_roary = mOTU( name =  "motupan_roary" ,
             faas = {g : v for g,v in faas.items() if g in roary} ,
-            cog_dict = {g : v for g,v in roary.items() if g in roary},
-            checkm_dict = {g : checkm[g]['Completeness'] for g in roary}, max_it = 20, method = "default")
+            gene_clusters_dict = {g : v for g,v in roary.items() if g in roary},
+            genome_completion_dict = {g : checkm[g]['Completeness'] for g in roary}, max_it = 20, method = "default")
 
     motupan_ppanggolin = mOTU( name =  "motupan_ppanggolin" ,
             faas = {g : v for g,v in faas.items() if g in ppanggolin} ,
-            cog_dict = {g : v for g,v in ppanggolin.items() if g in ppanggolin},
-            checkm_dict = {g : checkm[g]['Completeness'] for g in ppanggolin}, max_it = 20, method = "default")
+            gene_clusters_dict = {g : v for g,v in ppanggolin.items() if g in ppanggolin},
+            genome_completion_dict = {g : checkm[g]['Completeness'] for g in ppanggolin}, max_it = 20, method = "default")
 
     motupan_roary.roc_values()
     motupan_ppanggolin.roc_values()
@@ -621,7 +621,7 @@ def processing_goods():
         for gg in gs:
             ppanggolin_matrix[gg][k] = 1
 
-    pandas.DataFrame.from_dict(ppanggolin_matrix, orient = "index").to_csv("analyses/ppanggolin_matrix_species.csv", index_label = "cog")
+    pandas.DataFrame.from_dict(ppanggolin_matrix, orient = "index").to_csv("analyses/ppanggolin_matrix_species.csv", index_label = "gene_clusters")
     pandas.DataFrame.from_dict({g.name : {'motupan_completeness' : g.new_completness, 'checkm_completeness' : g.checkm_complet, **genome2stats[g.name]} for g in motupan_ppanggolin}, orient="index").to_csv("analyses/ppanggolin_matrix_genomes.csv", index_label = "genome")
 
     roary_matrix = {gg : dict({k : 0 for k in roary}) for g in roary.values() for gg in g}
