@@ -70,11 +70,17 @@ def motulize(args):
         print("Loading similarities", file = sys.stderr)
         dist_dict = {}
         with open(similarities) as handle:
-            for l in handle:
+            for l in tqdm(handle):
                 if "query" not in l:
                     ll = l.split("\t")
-                    g1 = ".".join(os.path.basename(ll[0]).split(".")[:-1]) if any([ll[0].endswith(ext) for ext in FASTA_EXTS]) else ll[0]
-                    g2 = ".".join(os.path.basename(ll[1]).split(".")[:-1]) if any([ll[1].endswith(ext) for ext in FASTA_EXTS]) else ll[1]
+                    if "." in ll[0] :
+                        g1 = ".".join(os.path.basename(ll[0]).split(".")[:-1]) if any([ll[0].endswith(ext) for ext in FASTA_EXTS]) else ll[0]
+                    else :
+                        g1 = ll[0]
+                    if "." in ll[1] :
+                        g2 = ".".join(os.path.basename(ll[1]).split(".")[:-1]) if any([ll[1].endswith(ext) for ext in FASTA_EXTS]) else ll[1]
+                    else :
+                        g2 = ll[1]
                     dist = float(ll[2])
                     dist_dict[(g1,g2)] = dist
     else :
