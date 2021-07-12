@@ -381,8 +381,6 @@ class mOTU:
 
         all_bins = {a.name : a for a in all_bins}
 
-        tt = [(k, v.checkm_complet, v.checkm_contamin) for k, v in all_bins.items() if v.checkm_complet > 0]
-
         good_mag = lambda b : all_bins[b].checkm_complet > mag_complete and all_bins[b].checkm_contamin < mag_contamin
         decent_sub = lambda b : all_bins[b].checkm_complet > sub_complete and all_bins[b].checkm_contamin < sub_contamin and not good_mag(b)
         good_pairs = [k for k,v  in dist_dict.items() if v > ani_cutoff and dist_dict.get((k[1],k[0]), 0) > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
