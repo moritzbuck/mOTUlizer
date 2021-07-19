@@ -26,7 +26,7 @@ setuptools.setup(
     ],
     keywords='bioinformatics clustering metagenomics microbial-genomics genomics',
     python_requires='>=3.6',
-    scripts = ['mOTUlizer/bin/mOTUlize.py','mOTUlizer/bin/mOTUpan.py','mOTUlizer/bin/mOTUconvert.py', 'mOTUlizer/bin/anvi-run-motupan.py' ]
+    scripts = ['mOTUlizer/bin/mOTUlize.py','mOTUlizer/bin/mOTUpan.py','mOTUlizer/bin/mOTUconvert.py', 'mOTUlizer/bin/anvi-script-compute-bayesian-pan-core' ]
 )
 
 # pushing stuff to pip : python3 setup.py sdist bdist_wheel

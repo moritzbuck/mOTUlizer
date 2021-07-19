@@ -1,4 +1,4 @@
-from mOTUlizer.classes.MetaBin import MetaBin
+    from mOTUlizer.classes.MetaBin import MetaBin
 from mOTUlizer.classes.COGs import *
 import subprocess
 import tempfile
@@ -426,7 +426,16 @@ class mOTU:
         #print(genome_clusters)
 
         zeros = len(str(len(genome_clusters)))
-        motus = [ mOTU(bins = [all_bins[gg] for gg in gs], name = prefix + str(i).zfill(zeros), dist_dict = {(k,l) : dist_dict[(k,l)] for k in gs for l in gs if (k,l) in dist_dict}) for i, gs in enumerate(genome_clusters)]
+
+        genome2clust = {gg : i for i, gs in enumerate(genome_clusters) for gg in gs}
+        dd_dicts = { i : {} for i in range(len(genome_clusters))}
+        for k,v in dist_dict.items():
+            c1 = genome2clust.get(k[0], "z1")
+            c2 = genome2clust.get(k[1], "z2")
+            if c1 == c2:
+                dd_dicts[c1][k] = v
+
+        motus = [ mOTU(bins = [all_bins[gg] for gg in gs], name = prefix + str(i).zfill(zeros), dist_dict = dd_dicts[i]) for i, gs in enumerate(genome_clusters)]
 
 
         return motus

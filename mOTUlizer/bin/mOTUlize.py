@@ -70,7 +70,7 @@ def motulize(args):
         print("Loading similarities", file = sys.stderr)
         dist_dict = {}
         with open(similarities) as handle:
-            for l in tqdm(handle):
+            for l in handle:
                 if "query" not in l:
                     ll = l.split("\t")
                     if "." in ll[0] :
@@ -128,13 +128,13 @@ def motulize(args):
     print("making stats", file = sys.stderr)
 
     out_dict = {}
-    for m in mOTUs:
+    for i,m in enumerate(mOTUs):
         stats = m.get_stats()
         stats[m.name]['representative'] = m.get_representative()
         out_dict.update(stats)
 
     short_out = []
-    header = ['mOTU', 'representative', 'mean_ANI', 'min_ANI', 'missing_edges', 'MAGs', 'SUBs']
+    header = ['mOTU', 'representative', 'mean_ANI', 'min_ANI', 'missing_edges', 'nb_MAGs', 'nb_SUBs', 'MAGs', 'SUBs']
     for k, v in out_dict.items():
         row = {
         'mOTU' : k,
@@ -142,6 +142,8 @@ def motulize(args):
         'mean_ANI' : v['mean_ANI']['mean_ANI'],
         'min_ANI' : min([vv[2] for vv in v['ANIs']]),
         'missing_edges' : v['mean_ANI']['missing_edges'],
+        'nb_MAGs' : len([g['name'] for g in v['genomes'] if g['checkm_complet'] > mag_complete and g['checkm_contamin'] < mag_contamin]),
+        'nb_SUBs' : len([g['name'] for g in v['genomes'] if g['checkm_complet'] <= mag_complete or g['checkm_contamin'] >= mag_contamin]),
         'MAGs' : ";".join([g['name'] for g in v['genomes'] if g['checkm_complet'] > mag_complete and g['checkm_contamin'] < mag_contamin]),
         'SUBs' : ";".join([g['name'] for g in v['genomes'] if g['checkm_complet'] <= mag_complete or g['checkm_contamin'] >= mag_contamin])
 

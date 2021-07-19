@@ -57,8 +57,10 @@ class MockmOTU(mOTU):
             self.fpr = "NA"
         else :
             self.recall = len(core.intersection(self.core))/core_len
-            self.fpr = sum([not c.startswith("CoreTrait_") for c in self.core])/len([not c.startswith("CoreTrait_") for c in self.core])
-
+            if len([not c.startswith("CoreTrait_") for c in self.core]) != 0:
+                self.fpr = sum([not c.startswith("CoreTrait_") for c in self.core])/len([not c.startswith("CoreTrait_") for c in self.core])
+            else self.fpr = 1
+            
         self.lowest_false = {k : v for k,v in self.gene_clustersCounts.items() if k in self.core and k not in core}
         self.lowest_false = 1 if(len(self.lowest_false) ==0) else min(self.lowest_false.items(), key = lambda x : x[1])[1]/len(self)
 
