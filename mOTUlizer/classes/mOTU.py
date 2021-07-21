@@ -1,5 +1,7 @@
-    from mOTUlizer.classes.MetaBin import MetaBin
-from mOTUlizer.classes.COGs import *
+from mOTUlizer.classes.MetaBin import MetaBin
+from mOTUlizer.classes.GFF import GFF
+
+from mOTUlizer.classes.GeneClusters import *
 import subprocess
 import tempfile
 import os
@@ -9,7 +11,7 @@ from math import log10
 import sys
 import json
 from mOTUlizer import __version__
-
+import multiprocessing
 
 mean = lambda x : sum(x)/len(x)
 
@@ -20,15 +22,54 @@ class mOTU:
     def __repr__(self):
         return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax =  None ) #self.consensus_tax()[0].split(";")[-1])
 
-    def __init__(self, **kwargs):
-        self.quiet = kwargs['quiet'] if "quiet" in kwargs else False
+    def __init__(self, genomes, name = "mOTU", make_gene_clustering = True, compute_core = False, quiet = False, **kwargs):
+        self.quiet = quiet
+        if not self.quiet:
+            print("Initializing mOTU", file = sys.stderr)
+
         self.likelies = None
         self.mock = []
-        if "gene_clusters_dict" in kwargs:
-            self.__for_mOTUpan(**kwargs)
+        self.members = genomes
+        self.gene_clustering = None
+        if make_gene_clustering:
+            precluster = kwargs.get('precluster', False)
+            threads = kwargs.get('threads', multiprocessing.cpu_count())
+            self.gene_clustering = GeneClusters.compute_GeneClusters(self, name = name, precluster = precluster, threads = threads)
+        if compute_core:
+            max_it = kwargs.get('motupan_maxit', 100)
+            method = kwargs.get('motupan_method', 'motupan_v0_3_2')
+            self.compute_core(method, max_it)
+            # self.likelies = self.__core_likelyhood(max_it = max_it)
 
-        if "bins" in kwargs:
-            self.__from_bins(**kwargs)
+    def compute_core(self):
+        if method == "motupan_v0_3_2":
+            self.__core_likelyhood(max_it = max_it)
+
+    def __for_mOTUgeneclusts(self, name,  fna_dict, gff_dict, gene_clusters_dict = None, threads = 4):
+        from Bio import SeqIO
+
+        self.name = name
+        self.members = genomes
+
+        self.genomes = {g for g in fna_dict}
+        self.fnas = fna_dict
+        if not all([g in self.genomes for g in gff_dict]):
+            raise ValueError("you are missing some gffs")
+        if len(gff_dict) > len(self.genomes):
+            raise ValueError("some gffs have no corresponding fnas")
+        self.gffs_files = gff_dict
+        self.gffs = {g : GFF(self.gffs_files[g], self.fnas[g]) for g in self.genomes}
+
+        self.faas = {}
+        t_dir = tempfile.TemporaryDirectory()
+        for genome,gff in self.gffs.items():
+            self.faas[genome] = pjoin(t_dir.name, genome + ".faa")
+            gff.make_fasta(self.faas[genome], "aas")
+
+        if  not gene_clusters_dict :
+
+            self.gene_clusters_dict = tt['genome2gene_clusterss']
+            self.aa2gene_clusters = tt['aa2gene_clusters']
 
 
     def __for_mOTUpan(self, name, faas, gene_clusters_dict, genome_completion_dict, threads = 4, precluster = False, max_it = 20, method = None, quiet=False):
@@ -37,7 +78,7 @@ class mOTU:
         if not quiet:
             print("Creating mOTU for mOTUpan", file = sys.stderr)
         if  not gene_clusters_dict :
-            tt = compute_COGs(self.faas, name = name, precluster = precluster, threads = threads)
+            tt = GeneClusters.compute_GeneClusters(self, name = name, precluster = precluster, threads = threads)
             self.gene_clusters_dict = tt['genome2gene_clusterss']
             self.aa2gene_clusters = tt['aa2gene_clusters']
         else :
@@ -59,8 +100,6 @@ class mOTU:
         self.core = {gene_clusters for gene_clusters, counts in self.gene_clustersCounts.items() if (100*counts/len(self)) > mean(genome_completion_dict.values())}
 
         self.method = method
-        if self.method :
-            self.likelies = self.__core_likelyhood(max_it = max_it)
 
 
     def __getitem__(self, i):

@@ -4,40 +4,76 @@ import sys
 from subprocess import Popen, PIPE, call
 import os
 import shutil
-from mOTUlizer.config import FASTA_EXTS
+from mOTUlizer.config import FASTA_EXTS, MAX_COMPLETE
+from mOTUlizer.errors import *
+
 
 class MetaBin:
     def __repr__(self) :
-        return "< bin {name} with {n} gene_clusterss>".format(n = len(self.gene_clusterss) if gene_clusterss else "NA", name = self.name)
+        return "< bin {name} with {n} gene_clusterss>".format(n = len(self.gene_clustering) if self.gene_clustering else "NA", name = self.name)
 
-    def __init__(self, name, gene_clusterss,fnas, faas, complet = None, contamin = 0, max_complete = 99.9):
+    def __init__(self, name,nucleotide_file = None, amino_acid_file = None, gff_file = None, complet = 100, contamin = 0):
         self.name = name
-        self.gene_clusterss = gene_clusterss if type(gene_clusterss) != str else set([gene_clusterss])
-        self.faas = faas
-        self.fnas = fnas
-        self.checkm_complet = complet
-        self.checkm_contamin = contamin
-        if not self.checkm_complet is None:
-            if self.checkm_complet > max_complete:
-                self.checkm_complet =  max_complete
+        self.gene_clustering = None
+        self.amino_acid_file = amino_acid_file
+        self.amino_acids = None
+        self.nucleotide_file = nucleotide_file
+        self.contigs = None
+        self.gff_file = gff_file
+        self.gff = None
+        self.original_complet = complet
+        self.original_contamin = contamin
+        if self.original_complet > MAX_COMPLETE:
+            self.original_complet =  MAX_COMPLETE
         self.new_completness = None
+
+        self.gff = GFF(self.gffs_files[g], self.fnas[g]) for g in self.genomes}
+
+        self.faas = {}
+        t_dir = tempfile.TemporaryDirectory()
+        for genome,gff in self.gffs.items():
+            self.faas[genome] = pjoin(t_dir.name, genome + ".faa")
+            gff.make_fasta(self.faas[genome], "aas")
+
+    def get_amino_acids(self):
+        if not self.amino_acids:
+            if not self.amino_acid_file:
+                if not self.gff_file:
+                    raise CantAminoAcidsError("You need either a gff or a amino-acid fasta if you want to use amino-acids")
+                if not self.nucleotide_file:
+                    raise CantAminoAcidsError("You need an nucleotide fasta if you want to use a gff to get amino-acids")
+                self.amino_acids = { feat.get_id() : feat.get_amino_acids() for feat in self.get_gff() if feat.feature == "CDS"}
+            else :
+                self.amino_acids = {s.id : s.seq for s in SeqIO(self.amino_acid_file, "fasta")}
+        return self.amino_acids
+
+    def get_gff(self):
+        if not self.gff_file:
+            CantGFFError("can't parse a gff if there ain't one")
+        self.gff = GFF(self, self.gff_file)
+
+    def get_contigs(self):
+        if not self.nucleotide_file:
+            CantNucleotideError("can't parse a nucleotide if there ain't one")
+        self.gff = GFF(self, self.gff_file)
+
 
     def get_data(self):
         return { 'name' : self.name,
                  'faa-file' : self.faas,
                  'fna-file' : self.fnas,
-                 'checkm_complet' : self.checkm_complet,
-                 'checkm_contamin' : self.checkm_contamin,
+                 'original_complet' : self.original_complet,
+                 'original_contamin' : self.original_contamin,
                  'new_completness' : self.new_completness,
         }
 
 
     def overlap(self, target):
-        return self.gene_clusterss.intersection(target.gene_clusterss)
+        return self.gene_clustering.intersection(target.gene_clustering)
 
-    def estimate_nb_gene_clusterss(self):
+    def estimate_nb_gene_clusters(self):
         assert self.new_completness != None, "new_completness not computed, please do"
-        return 100*len(self.gene_clusterss)/self.new_completness
+        return 100*len(self.gene_clustering)/self.new_completness
 
     @classmethod
     def get_anis(cls, bins, outfile = None, method = "fastANI", block_size = 500, threads=1):
