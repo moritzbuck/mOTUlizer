@@ -7,7 +7,7 @@ class GFF():
         return len(self.entries)
 
     def __getitem__(self, i):
-        if type(i) == int:
+        if type(i) == int and i < len(self):
             return self.entries[i]
         elif i in self.cdss:
             return self.cdss[i]

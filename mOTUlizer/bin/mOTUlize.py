@@ -43,7 +43,7 @@ def motulize(args):
 
     ani_cutoff = args.similarity_cutoff
     similarities = args.similarities
-    checkm_file = args.checkm
+    original_file = args.checkm
     out_json = args.output
     prefix = args.prefix
     mag_complete = args.MAG_completeness
@@ -62,8 +62,8 @@ def motulize(args):
     if similarities:
         assert os.path.exists(similarities), "The file for similarities does not exists"
         keep_simi = None
-    if checkm_file:
-        assert os.path.exists(checkm_file), "The file for checkm does not exists"
+    if original_file:
+        assert os.path.exists(original_file), "The file for checkm does not exists"
 
 
     if similarities:
@@ -82,7 +82,7 @@ def motulize(args):
                     else :
                         g2 = ll[1]
                     dist = float(ll[2])
-                    dist_dict[(g1,g2)] = dist
+                    dist_dict[(g1,g2)] = {'ani' : dist, 'subject_chunks' : None if len(ll) < 3 else float(ll[3]) , 'query_chunks' : None if len(ll) < 4 else float(ll[4]) }
     else :
         dist_dict = None
 
@@ -98,32 +98,37 @@ def motulize(args):
 
     print("Parsing the completeness/redundancy-file", file = sys.stderr)
 
-    if checkm_file is None:
+    if original_file is None:
         print("No file provided, all genomes are assumed perfect (100% complete, 0% redundancy)", file=sys.stderr)
-        checkm_info = {g : {'Completeness' : 100, 'Contamination' :0} for g in genomes}
+        original_info = {g : {'Completeness' : 100, 'Contamination' :0} for g in genomes}
     else :
-        checkm_info = parse_checkm(checkm_file)
+        original_info = parse_checkm(original_file)
 
 
-    assert all([g in checkm_info  for g in genomes]), "you do not have completness/contamination info for all you bins, values missing for :" + ", ".join([g for g in genomes if g not in checkm_info][0:10]) + "... (only 10 first shown   )"
+    assert all([g in original_info  for g in genomes]), "you do not have completness/contamination info for all you bins, values missing for :" + ", ".join([g for g in genomes if g not in original_info][0:10]) + "... (only 10 first shown   )"
 
     if fnas == {}:
         fnas = {g : None for g in genomes}
 
     print("making bin-objects", file = sys.stderr)
 
-    all_bins = [MetaBin(name = g, gene_clusterss = None, faas = None, fnas = fnas[g], complet = checkm_info[g]['Completeness'], contamin = checkm_info[g]['Contamination'], max_complete = 100) for g in genomes]
+    all_bins = [MetaBin(name = g, nucleotide_file = fnas[g], complet = original_info[g]['Completeness'], contamin = original_info[g]['Contamination']) for g in genomes]
 
-    if dist_dict is None:
+    whole_set = mOTU(all_bins)
+
+    if not dist_dict is None:
+        whole_set.load_anis(dist_dict)
+    else:
         print("Similarities not provided, will compute them with fastANI", file = sys.stderr)
         if keep_simi and not force:
-            assert not os.path.exists(keep_simi), "similarity file already exists, delete it or use '--force'"
-
-        dist_dict = MetaBin.get_anis(all_bins, threads = threads, outfile = keep_simi)
+            if os.path.exists(keep_simi):
+                 FileError("similarity file already exists, delete it or use '--force'")
 
     print("making mOTUs", file = sys.stderr)
 
-    mOTUs = mOTU.cluster_MetaBins(all_bins, dist_dict, ani_cutoff, prefix, mag_complete, mag_contamin, sub_complete, sub_contamin)
+    mOTUs = mOTU.cluster_MetaBins(whole_set, ani_cutoff, prefix, mag_complete, mag_contamin, sub_complete, sub_contamin, threads = threads )
+    if keep_simi :
+        whole_set.export_anis(keep_simi)
 
     print("making stats", file = sys.stderr)
 
@@ -140,17 +145,17 @@ def motulize(args):
         'mOTU' : k,
         'representative' : v['representative'],
         'mean_ANI' : v['mean_ANI']['mean_ANI'],
-        'min_ANI' : min([vv[2] for vv in v['ANIs']]),
+        'min_ANI' : min([vv['ani'] for vv in v['ANIs'].values()]),
         'missing_edges' : v['mean_ANI']['missing_edges'],
-        'nb_MAGs' : len([g['name'] for g in v['genomes'] if g['checkm_complet'] > mag_complete and g['checkm_contamin'] < mag_contamin]),
-        'nb_SUBs' : len([g['name'] for g in v['genomes'] if g['checkm_complet'] <= mag_complete or g['checkm_contamin'] >= mag_contamin]),
-        'MAGs' : ";".join([g['name'] for g in v['genomes'] if g['checkm_complet'] > mag_complete and g['checkm_contamin'] < mag_contamin]),
-        'SUBs' : ";".join([g['name'] for g in v['genomes'] if g['checkm_complet'] <= mag_complete or g['checkm_contamin'] >= mag_contamin])
+        'nb_MAGs' : len([g.name for g in m if g.original_complet > mag_complete and g.original_contamin < mag_contamin]),
+        'nb_SUBs' : len([g.name for g in m if g.original_complet <= mag_complete or g.original_contamin >= mag_contamin]),
+        'MAGs' : ";".join([g.name for g in m if g.original_complet > mag_complete and g.original_contamin < mag_contamin]),
+        'SUBs' : ";".join([g.name for g in m if g.original_complet <= mag_complete or g.original_contamin >= mag_contamin])
 
         }
         short_out += [row]
 
-    genome_line = "genomes=" + ";".join(["{}:completeness={}:redundancy={}".format(k['name'], k['checkm_complet'], k['checkm_contamin']) for v in out_dict.values() for k in v['genomes'] ])
+    genome_line = "genomes=" + ";".join(["{}:completeness={}:redundancy={}".format(k.name, k.original_complet, k.original_contamin) for v in out_dict.values() for k in m ])
 
     outformat ="""#mOTUlizer:mOTUlize:{version}
 #prefix={name}

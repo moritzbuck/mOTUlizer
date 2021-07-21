@@ -1,5 +1,6 @@
 from mOTUlizer.classes.MetaBin import MetaBin
 from mOTUlizer.classes.GFF import GFF
+from subprocess import call
 
 from mOTUlizer.classes.GeneClusters import *
 import subprocess
@@ -22,23 +23,27 @@ class mOTU:
     def __repr__(self):
         return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax =  None ) #self.consensus_tax()[0].split(";")[-1])
 
-    def __init__(self, genomes, name = "mOTU", make_gene_clustering = True, compute_core = False, quiet = False, **kwargs):
+    def __init__(self, genomes, name = "mOTU", make_gene_clustering = False, compute_core = False, quiet = False, **kwargs):
         self.quiet = quiet
         if not self.quiet:
             print("Initializing mOTU", file = sys.stderr)
 
+        self.name = name
         self.likelies = None
         self.mock = []
         self.members = genomes
         self.gene_clustering = None
+        self.genome_id2genome = {g.name : g for g in self}
+        self._core_computed = False
         if make_gene_clustering:
             precluster = kwargs.get('precluster', False)
             threads = kwargs.get('threads', multiprocessing.cpu_count())
-            self.gene_clustering = GeneClusters.compute_GeneClusters(self, name = name, precluster = precluster, threads = threads)
+            self.gene_clustering = GeneClusters.compute_GeneClusters([self], name = name, precluster = precluster, threads = threads)
         if compute_core:
             max_it = kwargs.get('motupan_maxit', 100)
             method = kwargs.get('motupan_method', 'motupan_v0_3_2')
             self.compute_core(method, max_it)
+            self._core_computed = True
             # self.likelies = self.__core_likelyhood(max_it = max_it)
 
     def compute_core(self):
@@ -103,8 +108,12 @@ class mOTU:
 
 
     def __getitem__(self, i):
-        return self.members[i]
-
+        if type(i) == int and i < len(self):
+            return self.members[i]
+        elif i in self.genome_id2genome:
+            return self.genome_id2genome[i]
+        else :
+            raise KeyError(str(i) + "is not a valid entry")
 
     def roc_values(self, boots):
         if boots > 0 or len(self.mock) >0 :
@@ -171,76 +180,54 @@ class mOTU:
     def mean_overlap(self) :
         return mean(list(self.overlap_matrix().values()))
 
-    def fastani_matrix(self):
-        if not hasattr(self, 'fastani_dict'):
-            if not shutil.which('fastANI'):
-                print("You need fastANI if you do not provide a file with pairwise similarities, either install it or provide pairwise similarities (see doc...)", file = sys.stderr)
-                sys.exit(-1)
-            cmd = "fastANI --ql {temp_file}  --rl {temp_file}  -o {temp_out} -t {threads} 2> /dev/null"
-            temp_inp = tempfile.NamedTemporaryFile()
-            temp_out = tempfile.NamedTemporaryFile()
-
-            with open(temp_inp.name, "w") as handle:
-                handle.writelines([t.genome + "\n" for t in self.members ])
-
-            cmd = cmd.format(temp_file = temp_inp.name, temp_out = temp_out.name, threads = THREADS)
-
-            subprocess.call(cmd, shell=True)
-
-            with open(temp_out.name ) as handle:
-                self.fastani_dict = {}
-                for l in handle:
-                    q = os.path.basename(l.split()[0][:-4])
-                    s = os.path.basename(l.split()[1][:-4])
-                    if q  != s:
-                        value = float(l.split()[2])
-                        self.fastani_dict[(q,s)] = value
-        return self.fastani_dict
-
-
     def get_stats(self):
-        out = {}
-
-        out[self.name] = { "nb_genomes" : len(self),
-        "core" : list(self.core) if self.core else None,
-        "aux_genome" : [k for k,v in self.gene_clustersCounts.items() if k not in self.core] if self.core else None ,
-        "singleton_gene_clusterss" : [k for k,v in self.gene_clustersCounts.items() if k not in self.core if v == 1] if self.core else None,
-        "gene_clusterss" : None if self.gene_clusters_dict is None else {'genome' : {k : list(v) for k,v in self.gene_clusters_dict.items()}, 'aa' : self.aa2gene_clusters} if self.aa2gene_clusters else ({k : list(v) for k,v  in self.gene_clusters_dict.items()} if self.gene_clusters_dict else None),
-        "mean_ANI" : self.get_mean_ani() if (hasattr(self, 'fastani_dict') or all([hasattr(g, "genome") for g in self])) else None,
-        "ANIs" : [[k[0], k[1], v] for k, v in self.fastani_matrix().items()] if (hasattr(self, 'fastani_dict')  or all([hasattr(g, "genome") for g in self])) else None,
-        "genomes" : [v.get_data() for v in self],
-        "likelies" : self.likelies
-        }
+        out = {self.name : {
+                            "nb_genomes" : len(self),
+                            }
+              }
+        if self._core_computed:
+            out[self.name].update({
+            "core" : [g.name for g in self.gene_clusters if g.core],
+            "accessory_genome" :  [g.name for g in self.gene_clusters if g.accessory],
+            "singleton_gene_clusters" : [g.name for g in self.gene_clusters if len(g == 1)],
+            "genomes" : [v.name for v in self],
+            "likelies" : {g.name : g.likely for g in gene_clusters}
+            })
+        if all([g.nucleotide_file for g in self]):
+            out[self.name].update({
+                "mean_ANI" : self.get_mean_ani(),
+                "ANIs" : self.get_anis()
+                })
         return out
 
     def get_representative(self, method = "complex", max_redund = 5, min_complete = 95):
             tt = [v.get_data() for v in self]
             data = { t['name'] : t for t in tt}
-            if all([v['checkm_contamin'] > max_redund for v in data.values()]):
-                return max( [ (k , v['checkm_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
-            data = {k : v for k,v in data.items() if v['checkm_contamin'] < max_redund}
-            if any([v['checkm_complet'] > min_complete for v in data.values()])  :
-                data = {k : v for k,v in data.items() if v['checkm_complet'] > min_complete}
-                best_redund = min(data.items(), key = lambda x : x[1]['checkm_contamin'])[1]['checkm_contamin']
-                return max( [ (k , v['checkm_complet']) for k,v in data.items() if v['checkm_contamin'] == best_redund], key = lambda x: x[1])[0]
+            if all([v['original_contamin'] > max_redund for v in data.values()]):
+                return max( [ (k , v['original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
+            data = {k : v for k,v in data.items() if v['original_contamin'] < max_redund}
+            if any([v['original_complet'] > min_complete for v in data.values()])  :
+                data = {k : v for k,v in data.items() if v['original_complet'] > min_complete}
+                best_redund = min(data.items(), key = lambda x : x[1]['original_contamin'])[1]['original_contamin']
+                return max( [ (k , v['original_complet']) for k,v in data.items() if v['original_contamin'] == best_redund], key = lambda x: x[1])[0]
             else:
-                return max( [ (k , v['checkm_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
+                return max( [ (k , v['original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
 
     # def get_representative(tt, max_redund = 5, min_complete = 95):
     #         data = { t['name'] : t for t in tt}
     #
-    #         data = {k : v for k,v in data.items() if v['checkm_contamin'] < max_redund}
-    #         if any([v['checkm_complet'] > min_complete for v in data.values()])  :
-    #             data = {k : v for k,v in data.items() if v['checkm_complet'] > min_complete}
-    #             best_redund = min(data.items(), key = lambda x : x[1]['checkm_contamin'])[1]['checkm_contamin']
-    #             return min( [ (k , v['checkm_contamin']) for k,v in data.items() if v['checkm_contamin'] == best_redund], key = lambda x: x[1])[0]
+    #         data = {k : v for k,v in data.items() if v['original_contamin'] < max_redund}
+    #         if any([v['original_complet'] > min_complete for v in data.values()])  :
+    #             data = {k : v for k,v in data.items() if v['original_complet'] > min_complete}
+    #             best_redund = min(data.items(), key = lambda x : x[1]['original_contamin'])[1]['original_contamin']
+    #             return min( [ (k , v['original_contamin']) for k,v in data.items() if v['original_contamin'] == best_redund], key = lambda x: x[1])[0]
     #         elif len(data) >0 :
-    #             return max( [ (k , v['checkm_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
+    #             return max( [ (k , v['original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
     #         else :
     #             return None
 
     def get_mean_ani(self):
-        dist_dict = self.fastani_matrix()
+        dist_dict = self.get_anis()
         dists = [dist_dict.get((a.name,b.name)) for a in self for b in self if a != b ]
         missing_edges = sum([d is None for d in dists])
         found_edges = [d is None for d in dists]
@@ -284,7 +271,7 @@ class mOTU:
             pp =  "\nYour {name}-run for {nb_mags} genomes (with mean initial completeness {mean_start:.2f}) resulted\n"
             pp += "in a core of {core_len} traits with a total sum of loglikelihood-ratios {llhr:.2f} and a corrected \n"
             pp += "mean completness of {mean_new:.2f}, resulting to a estimated mean traits per genome count of {trait_count:.2f}\n"
-            pp = pp.format(name = self.name, nb_mags = len(self), core_len = core_len, mean_start = mean([b.checkm_complet for b in self]),
+            pp = pp.format(name = self.name, nb_mags = len(self), core_len = core_len, mean_start = mean([b.original_complet for b in self]),
                         mean_new =  mean([b.new_completness for b in self]), llhr =  sum([l if l > 0 else -l for l in likelies.values()]),
                         trait_count = mean([100*len(b.gene_clusterss)/b.new_completness for b in self]))
             print(pp, file = sys.stderr)
@@ -292,7 +279,7 @@ class mOTU:
         return likelies
 
     def __core_prob(self, gene_clusters, complet = "checkm"):
-        comp = lambda mag : (mag.checkm_complet if complet =="checkm" else mag.new_completness)/100
+        comp = lambda mag : (mag.original_complet if complet =="checkm" else mag.new_completness)/100
         presence = [log10(comp(mag)) for mag in self if gene_clusters in mag.gene_clusterss]
         abscence = [log10(1 - comp(mag)) for mag in self if gene_clusters not in mag.gene_clusterss]
         return sum(presence + abscence)
@@ -300,7 +287,7 @@ class mOTU:
     def __pange_prob(self, gene_clusters, core_size, complet = "checkm"):
 #        pool_size = sum(self.gene_clustersCounts.values())
         pool_size = sum([c for k,c in  self.gene_clustersCounts.items()])
-        comp = lambda mag : (mag.checkm_complet if complet =="checkm" else mag.new_completness)/100
+        comp = lambda mag : (mag.original_complet if complet =="checkm" else mag.new_completness)/100
         #presence = [1 - (1-self.gene_clustersCounts[gene_clusters]/pool_size)**(len(mag.gene_clusterss)-(core_size*comp(mag))) for mag in self if gene_clusters in mag.gene_clusterss]
         #abscence = [ (1-self.gene_clustersCounts[gene_clusters]/pool_size)**(len(mag.gene_clusterss)-(core_size*comp(mag))) for mag in self if gene_clusters not in mag.gene_clusterss]
 
@@ -369,7 +356,7 @@ class mOTU:
             v['genomes'] = ";".join(v['genomes'])
 
         header = ['trait_name','type', 'genome_occurences', 'log_likelihood_to_be_core', 'mean_copy_per_genome','genomes', 'genes']
-        genome_line = "genomes=" + ";".join(["{}:prior_complete={}:posterior_complete={}".format(k['name'], k['checkm_complet'], k['new_completness']) for k in stats['genomes']])
+        genome_line = "genomes=" + ";".join(["{}:prior_complete={}:posterior_complete={}".format(k['name'], k['original_complet'], k['new_completness']) for k in stats['genomes']])
         mean = lambda l : sum([ll for ll in l])/len(l)
 
         if stats['mean_recall'] != "NA":
@@ -404,25 +391,94 @@ class mOTU:
             name = self.name.strip("_"),
             core_len = len(self.core),
             genomes=genome_line,
-            prior_complete=mean([b.checkm_complet for b in self]),
+            prior_complete=mean([b.original_complet for b in self]),
             post_complete=mean([b.new_completness for b in self]),
             SALLHR=sum([l if l > 0 else -l for l in self.likelies.values()]),
             size=mean([100*len(b.gene_clusterss)/b.new_completness for b in self]),
             boostrap=bootsy,
             header = "\t".join(header), data = "\n".join(["\t".join([str(v[hh]) for hh in header]) for v in out_dict.values()]))
 
+    def load_anis(self, ani_dict, force = False):
+        if not self.quiet:
+            print(f"checking if the {len(ani_dict)} entries of your imported ani correspond to genomes")
+        if not force:
+            for k,v in ani_dict.items():
+                if "ani" not in v:
+                    raise ValueError("there should be a dict with a keys 'ani' in there")
+                for kk in k:
+                    if kk not in self.genome_id2genome:
+                        raise GenomeIdError(f"Some genome IDs of your imported similarity file are not in the genome set,\n use 'force = True' if you just want to subset,\n the genome id that crashed it is {kk}")
+        self.anis = {(self.genome_id2genome[k[0]], self.genome_id2genome[k[1]]) : v for k,v in ani_dict.items()}
 
-    @classmethod
-    def cluster_MetaBins(cls , all_bins, dist_dict, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_contamin = 5, sub_complete = 0, sub_contamin = 100):
+    def get_anis(self, method = "fastANI", block_size = 500, threads=1):
+        if not hasattr(self, 'anis'):
+            if method == "fastANI":
+                if not shutil.which('fastANI'):
+                    print("You need fastANI if you do not provide a file with pairwise similarities, either install it or provide pairwise similarities (see doc...)", file = sys.stderr)
+                    sys.exit(-1)
+                fastani_file = tempfile.NamedTemporaryFile().name
+
+                mags = [b.nucleotide_file for b in self]
+                if any([m is None for m in mags]):
+                    raise CantNucleotideError("All the genomes you want to have ANI for have to have a a nucleotide fasta file")
+
+                mag_blocks = [mags[i:(i+block_size)] for i in list(range(0,len(mags), block_size))]
+
+                if len(mag_blocks) > 1:
+                    print("You have more then {bsize} bins, so we will run fastANI in blocks, if it crashes due to memory, make smaller blocks".format(bsize = block_size), file=sys.stderr)
+
+                with open(fastani_file, "w") as handle:
+                    handle.writelines(["query\tsubject\tani\tsize_q\tsize_s\n"])
+
+                for i,bloc1 in enumerate(mag_blocks):
+                    b1_tfile = tempfile.NamedTemporaryFile().name
+
+                    with open(b1_tfile, "w") as handle:
+                        handle.writelines([l +"\n" for l in bloc1])
+
+                    for j,bloc2 in enumerate(mag_blocks):
+                            print("doing bloc {i} and {j}".format(i = i, j=j), file = sys.stderr)
+                            b2_tfile = tempfile.NamedTemporaryFile().name
+                            with open(b2_tfile, "w") as handle:
+                                handle.writelines([l  +"\n" for l in bloc2])
+
+                            out_tfile = tempfile.NamedTemporaryFile().name
+                            call("fastANI --ql {b1} --rl {b2} -o {out} -t {threads} 2> /dev/null".format(b1 = b1_tfile, b2 = b2_tfile, out = out_tfile, threads = threads), shell = True)
+                            with open(out_tfile) as handle:
+                                new_dat = ["\t".join([ll for ll in l.split()]) +"\n" for l in handle.readlines()]
+                            with open(fastani_file, "a") as handle:
+                                handle.writelines(new_dat)
+
+                            os.remove(out_tfile)
+                            os.remove(b2_tfile)
+
+                os.remove(b1_tfile)
+                with open(fastani_file) as handle:
+                    handle.readline()
+                    out_dists = {(os.path.basename(l.split()[0]), os.path.basename(l.strip().split()[1])) : {'ani' : float(l.split()[2]), 'subject_chunks' : float(l.split()[3]), 'query_chunks' : float(l.split()[2]) } for l in handle}
+                    out_dists = {( ".".join(k[0].split(".")[:-1]) if any([k[0].endswith(ext) for ext in FASTA_EXTS]) else k[0],
+                                   ".".join(k[1].split(".")[:-1]) if any([k[1].endswith(ext) for ext in FASTA_EXTS]) else k[1] ): v
+                                   for k,v in out_dists.items() }
+                os.remove(fastani_file)
+            else :
+                print("No other method for ani computation implemented yet")
+                sys.exit()
+            self.anis = {(self.genome_id2genome[k[0]], self.genome_id2genome[k[1]]) : v for k,v in out_dists.items()}
+        return self.anis
+
+    def cluster_MetaBins(self, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_contamin = 5, sub_complete = 0, sub_contamin = 100, threads = 1):
         import igraph
 
-        print("seeding bin-graph", file = sys.stderr )
+        dist_dict = self.get_anis(threads = threads)
 
-        all_bins = {a.name : a for a in all_bins}
+        if not self.quiet:
+            print("seeding bin-graph", file = sys.stderr )
 
-        good_mag = lambda b : all_bins[b].checkm_complet > mag_complete and all_bins[b].checkm_contamin < mag_contamin
-        decent_sub = lambda b : all_bins[b].checkm_complet > sub_complete and all_bins[b].checkm_contamin < sub_contamin and not good_mag(b)
-        good_pairs = [k for k,v  in dist_dict.items() if v > ani_cutoff and dist_dict.get((k[1],k[0]), 0) > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
+        all_bins = {a.name : a for a in self}
+
+        good_mag = lambda b : b.original_complet > mag_complete and b.original_contamin < mag_contamin
+        decent_sub = lambda b : b.original_complet > sub_complete and b.original_contamin < sub_contamin and not good_mag(b)
+        good_pairs = [k for k,v  in dist_dict.items() if v['ani'] > ani_cutoff and dist_dict.get((k[1],k[0]), 0)['ani'] > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
         species_graph = igraph.Graph()
         vertexDeict = { v : i for i,v in enumerate(set([x for k in good_pairs for x in k]))}
         rev_vertexDeict = { v : i for i,v in vertexDeict.items()}
@@ -438,7 +494,7 @@ class mOTU:
         print("recruiting to graph of the", len(genome_clusters) ," mOTUs of mean length", mean(genome_clusters), file = sys.stderr)
 
 
-        left_pairs = {k : v for k, v in dist_dict.items() if v > ani_cutoff and k[0] != k[1] and ((decent_sub(k[0]) and good_mag(k[1])) or (decent_sub(k[1]) and good_mag(k[0])))}
+        left_pairs = {k : v['ani'] for k, v in dist_dict.items() if v['ani'] > ani_cutoff and k[0] != k[1] and ((decent_sub(k[0]) and good_mag(k[1])) or (decent_sub(k[1]) and good_mag(k[0])))}
         print("looking for good_left pairs", file = sys.stderr)
 #        print(left_pairs)
 
@@ -467,14 +523,29 @@ class mOTU:
         zeros = len(str(len(genome_clusters)))
 
         genome2clust = {gg : i for i, gs in enumerate(genome_clusters) for gg in gs}
-        dd_dicts = { i : {} for i in range(len(genome_clusters))}
+        dd_dicts = [dict() for i in range(len(genome_clusters))]
         for k,v in dist_dict.items():
             c1 = genome2clust.get(k[0], "z1")
             c2 = genome2clust.get(k[1], "z2")
             if c1 == c2:
-                dd_dicts[c1][k] = v
+                dd_dicts[c1][(k[0].name, k[1].name)] = v
 
-        motus = [ mOTU(bins = [all_bins[gg] for gg in gs], name = prefix + str(i).zfill(zeros), dist_dict = dd_dicts[i]) for i, gs in enumerate(genome_clusters)]
-
+        motus = [ mOTU(genomes = gs, name = prefix + str(i).zfill(zeros), quiet = True) for i, gs in enumerate(genome_clusters)]
+        for motu, dists in zip(motus, dd_dicts):
+            motu.load_anis(dists)
 
         return motus
+
+    def __iter__(self):
+       return mOTUIterator(self)
+
+class mOTUIterator:
+    def __init__(self, motu):
+        self._motu = motu
+        self.index = -1
+
+    def __next__(self):
+        if self.index < len(self._motu)-1:
+            self.index += 1
+            return self._motu[self.index]
+        raise StopIteration
