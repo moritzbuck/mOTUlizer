@@ -6,28 +6,66 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from os.path import join as pjoin
 import shutil
+from mOTUlizer.errors import *
+from mOTUlizer.utils import random_name
+from mOTUlizer.classes.tools.Muscle import Muscle
+import json
 
 methods =  ['silixCOGs', 'mmseqsCluster']
 class GeneClusters():
     def __repr__(self):
-        return f"< a GeneClusters-ing of {len(self)} GeneClusters from {len(self._motus)} mOTUs>"
+        return f"< a GeneClusters-ing of {len(self)} GeneClusters from {len(self.genomes)} genomes>"
 
-    def __init__(self, motus, gene2gene_clust = None, gene2genome = None, gene_clust2rep = dict(), ):
-        self._motus = motus
-        self.genomes = [g for motu in motus for g in motu]
-        self.gene_clusters = []
-        if gene2gene_clust:
-            all_gene_clust = {s : [] for s in set(gene2gene_clust.values())}
-            for gene, clust in gene2gene_clust.items():
-                all_gene_clust[clust].append(gene)
-            self.gene_clusters = [GeneCluster(self, genes, gene_clust2rep.get(clust, None)) for clust, genes in all_gene_clust.items()]
-        self.gene2genome = gene2genome
+    def __init__(self, motus_or_genome, gene_clusters = None, storage = None, quiet = False):
+        if type(motus_or_genome) == list:
+            self._from_motu = True
+            if not all([hasattr(motu, "can_haz_gene_clusters") for motu in motus_or_genome]):
+                raise CantGeneClusterError(f"you need to pass either an mOTU -list or a single genome,\n you passed a list of things where something don't work \n you passed {motus_or_genome}\n this is dirty, I am sorry, too lazy to implement interfaces")
+            self.genomes = [g for motu in motus_or_genome for g in motu]
+        else :
+            self._from_motu = False
+            if not hasattr(motus_or_genome, "can_haz_gene_clusters"):
+                raise CantGeneClusterError(f"you need to pass either an mOTU-list or a genome as motus_or_genome,\n you passed a single thing that don't work\ the thing is {motus_or_genome}")
+            self.genomes = [motus_or_genome]
+
+        self.quiet = quiet
+        self.storage = storage
+
+        if self.storage:
+            if not os.path.exists(self.storage):
+                if not self.quiet:
+                    print(f"Creating {self.storage} as storage folder", sys.stderr)
+                    os.makedirs(storage, exist_ok=False)
+
+        if gene_clusters:
+            self.gene_clusters = [g for g in gene_clusters]
+            if self._from_motu:
+                cluster_sets = { g : [] for g in self.genomes}
+                for clust in self.gene_clusters:
+                    clust.set_storage(self.storage)
+                    clust.quiet = self.quiet
+                    for genom in clust.get_genomes():
+                        cluster_sets[genom].append(clust)
+                for g in self.genomes :
+                    g.set_gene_clusters(cluster_sets[g])
+
+        self._clust_set = None
+
+
+
+    def get_genecluster_counts(self):
+        return {g : len(g.get_genomes()) for g in self}
+
+    def get_clust_set(self) :
+        if not self._clust_set:
+            self._clust_set =  set(self.gene_clusters)
+        return self._clust_set
 
     def __getitem__(self, i):
         if type(i) == int and i < len(self):
             return self.gene_clusters[i]
         else:
-            raise KeyError(str(i) + "is not a valid entry")
+            raise KeyError(str(i) + " is not a valid entry for your GeneCluster, try the name of the GC.")
 
     def __len__(self):
         return len(self.gene_clusters)
@@ -36,9 +74,58 @@ class GeneClusters():
     def __iter__(self):
        return GeneClustersIterator(self)
 
+    def item(self):
+        return GeneClustersItemIterator(self)
+
+    def export_gene_clusters(self, file, force = False):
+        data = { c.name : c.export_data() for c in self}
+        with open(file, "w") as handle:
+            json.dump(data, handle, indent = 2, sort_keys = True)
 
     @classmethod
-    def compute_GeneClusters(cls, motus, name, precluster = False, threads = 4, method =  "mmseqsCluster", **kwargs):
+    def load(cls, file, motu, force = False, storage = None):
+        if not os.path.exists(file):
+            raise FileError("Your gene-cluster file does not exist or something")
+        try :
+            with open(file) as handle:
+                data = json.load(handle)
+                json_data = True
+        except :
+            try :
+                with open(file) as handle:
+                    data = {l.split("\t")[0] : l[:-1].split("\t")[1:] for l in handle}
+                    json_data = False
+            except :
+                raise CantLoadGeneClusterError("your genes-clusters are neither json- or tsv- formated")
+
+        if json_data and all(["genes2genome" in v for v in data.values()]):
+            cluster_names = list(data.keys())
+            genomes = {genome for k,v in data.items() for gene, genomes in v['genes2genome'].items() for genome in genomes}
+            genes2genome = {k : {gene : [motu.get(genome) for genome in genomes] for gene, genomes in v['genes2genome'].items()} for k,v in data.items() }
+            representatives = {k : v.get('representative') for k,v in genes2genome.items()}
+        else :
+            print("Running the vintage parser! (e.g. for gene-clusters save with mOTUpan v < 0.4.0)" , file = sys.stderr)
+            cluster_names = list({vv for v in data.values() for vv in v})
+            genomes = {k for k in data}
+            clust2genome = {c : []  for c in cluster_names}
+            for k,v in data.items():
+                for vv in v:
+                    clust2genome[vv].append(k)
+            genes2genome = {k : {"MockGene_" + genome : [motu.get(genome)] for genome in v} for k,v in clust2genome.items() }
+            representatives = {k : None for k in cluster_names}
+
+            if not all([motu.get(genome) for genome in genomes]):
+                if force:
+                    genes2genome = {k : {gene : [genome for genome in genomes if genome] for gene, genomes in v.items()} for k,v in genes2genome.items() }
+                else :
+                    bads = [genome for genome in genomes if not motu.get(genome)]
+                    raise CantLoadGeneClusterError(f"can't find some genome-IDs of your clusterings in your mOTU, I can filter them out but you need to explicitly say 'force=True'\n the missing genomes are {';'.join(bads)}")
+
+        clusters = [GeneCluster(name = k, genes2genome = genes2genome[k], representative = representatives[k]) for k in cluster_names]
+        return GeneClusters([motu], gene_clusters = clusters, storage = storage)
+
+    @classmethod
+    def compute_GeneClusters(cls, motus, name, precluster = False, threads = 4, storage = None, method =  "mmseqsCluster", **kwargs):
         name = name + method + "_"
 
         temp_folder = tempfile.mkdtemp(prefix = name)
@@ -143,11 +230,9 @@ class GeneClusters():
             print("For", len(recs), "CDSes we got ", len(gene_clusters2rep), " gene-clusters", file = sys.stderr)
 
             recs = {k : rep2clust[v] for k, v in recs.items()}
-            genome2gene_clusters = {k : set()  for motu in motus for k in motu}
-            for k,v in recs.items():
-                for vv in prot2genome[k]:
-                    genome2gene_clusters[vv].update([v])
-
+            clst2gene = { clst : [] for clst in gene_clusters2rep}
+            for gene, clst in recs.items():
+                clst2gene[clst].append(gene)
         else :
             print("The '{}' clustering method is not implemented yet".format(name) , file = sys.stderr)
             print("only allowed are :", methods, file = sys.stderr)
@@ -156,11 +241,8 @@ class GeneClusters():
 
         shutil.rmtree(temp_folder)
 
-        for k,v in genome2gene_clusters.items():
-            genome2gene_clusters[k] = set(v)
-
-
-        return GeneClusters(motus, recs, prot2genome , gene_clusters2rep)
+        clusts = [GeneCluster({g : prot2genome[g] for g in genes}, gene_clusters2rep[clust], name = clust, storage = None if not storage else (storage + "clusters/") ) for clust, genes in clst2gene.items()]
+        return GeneClusters(motus, clusts, storage )
 #        return { 'genome2gene_clusterss' : genome2gene_clusters, 'aa2gene_clusters' : recs, 'gene_clusters2rep' : gene_clusters2rep}
 
 class GeneClustersIterator:
@@ -174,11 +256,73 @@ class GeneClustersIterator:
             return self._gene_clusters[self.index]
         raise StopIteration
 
-
-
 class GeneCluster():
+    def __repr__(self):
+        return f"< a GeneCluster of {len(self.genes)} genes from {len(self.get_genomes())} genomes>"
 
-    def __init__(self, gene_clusters, genes, representative = None):
-        self._gene_clusters = gene_clusters
-        self.genes = genes
+    def __init__(self, genes2genome, representative = None, name = None, storage = None, quiet = False):
+        """write chekcs here"""
+        if not name:
+            self.name = "GeneCluster_" +random_name()
+        else :
+            self.name = name
+        self.genes = list(genes2genome.keys())
         self.representative = representative
+        self.gene2genome = genes2genome
+        self._genomes = None
+        self.set_storage(storage)
+        self.quiet = quiet
+
+    def set_storage(self, storage):
+        if storage:
+            if storage.endswith(self.name):
+                self.storage = storage
+            else :
+                self.storage = pjoin(storage, self.name)
+            os.makedirs(self.storage, exist_ok = True)
+        else :
+            self.storage = None
+
+    def __len__(self):
+        return len(self.genes)
+
+    def export_data(self):
+        return {'genes2genome' :
+                    {gene : [g.name for g in genomes] for gene, genomes in self.gene2genome.items() },
+                 'representative' : self.representative
+               }
+
+    def get_genomes(self):
+        if not self._genomes:
+            self._genomes = {gg for g in self.gene2genome.values() for gg in g}
+        return self._genomes
+
+    def get_seqs(self):
+        seqs = dict()
+        for gene, genomes in self.gene2genome.items():
+            seqs[gene] = genomes[0].get_aa(gene)
+        return seqs
+
+    def get_alignment(self, method = "muscle"):
+        if self.storage:
+            out_file = pjoin(self.storage, "alignment.fasta")
+        else :
+            out_file = None
+        if method == "muscle":
+            tool = Muscle(seqsdict_or_infile = self.get_seqs(), out_file = out_file, quiet = True)
+        else :
+            raise CantMethodError(f"The alignment method ({method}) you asked for is not implemented yet.")
+
+        if out_file and not os.path.exists(out_file):
+            tool.run_command()
+        elif not self.quiet:
+            print("Alignment loaded from file", file = sys.stderr)
+
+        ali = tool.parse_output()
+        return ali
+
+    def ali2codon(self):
+        codoned = {gid for gid in self.genes}
+        for gid, allied in self.get_alignment().items():
+            seq = self.gene2genome[gid][0].get_gene(gid)
+        return seq

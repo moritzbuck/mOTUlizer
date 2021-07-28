@@ -1,5 +1,8 @@
 from random import random, sample, choice
 from mOTUlizer.classes.mOTU import mOTU, mean
+from mOTUlizer.classes.MetaBin import MetaBin
+from mOTUlizer.classes.GeneClusters import *
+
 from collections import defaultdict
 from numpy.random import normal
 from numpy import floor, mean
@@ -22,8 +25,7 @@ class MockmOTU(mOTU):
 
         self.size_accessory = sum(sub_dist)
         self.mean_size_accessory = sum(sub_dist)/nb_genomes
-
-        mock_genomes = dict()
+        mock_genomes = {}
         for k in range(nb_genomes):
             mock_genomes["Genome_{}".format(k)] = list(core)
 
@@ -49,19 +51,27 @@ class MockmOTU(mOTU):
     #        self.accessory = accessory
         self.mean_size = mean([len(m) for m in mock_genomes.values()])
         self.real_core_len = core_len
-
         zerifneg = lambda g: 0.001 if g < 0 else g
-        super().__init__(name = name, faas = {}, gene_clusters_dict = self.incompletes, genome_completion_dict = { k : zerifneg(normal(v, 10)) for k,v in self.completenesses.items()}, max_it = max_it, method = method, quiet=True)
+        self.members = [MetaBin(name = k, genome_completeness = zerifneg(normal(self.completenesses[k], 10))) for k in mock_genomes]
+        super().__init__(genomes = self.members, name = name, quiet=True, compute_core = False)
+        cluster2genome = {clust : [] for set_ in self.incompletes.values() for clust in set_ }
+        for genome, set_ in self.incompletes.items():
+            for clust in set_ :
+                cluster2genome[clust].append(genome)
+        clusters = [GeneCluster(name = clust, genes2genome = { "Imp" + g : [self[g]] for g in genomes}) for clust, genomes in cluster2genome.items()]
+        self.gene_clusters = GeneClusters([self], gene_clusters = clusters)
+        self.compute_core()
         if core_len == 0:
             self.recall = "NA"
             self.fpr = "NA"
         else :
-            self.recall = len(core.intersection(self.core))/core_len
-            if len([not c.startswith("CoreTrait_") for c in self.core]) != 0:
-                self.fpr = sum([not c.startswith("CoreTrait_") for c in self.core])/len([not c.startswith("CoreTrait_") for c in self.core])
-            else self.fpr = 1
-            
-        self.lowest_false = {k : v for k,v in self.gene_clustersCounts.items() if k in self.core and k not in core}
+            self.recall = len(core.intersection({k.name for k in self.core}))/core_len
+            if len([not c.name.startswith("CoreTrait_") for c in self.core]) != 0:
+                self.fpr = sum([not c.name.startswith("CoreTrait_") for c in self.core])/len([not c.name.startswith("CoreTrait_") for c in self.core])
+            else :
+                self.fpr = 1
+
+        self.lowest_false = {k : len(k.get_genomes()) for k in self.gene_clusters if k in self.core and k.name not in core}
         self.lowest_false = 1 if(len(self.lowest_false) ==0) else min(self.lowest_false.items(), key = lambda x : x[1])[1]/len(self)
 
 

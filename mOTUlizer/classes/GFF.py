@@ -1,6 +1,7 @@
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from mOTUlizer.errors import CantAminoAcidsError
+from math import floor
 
 class GFF():
     def __len__(self):
@@ -73,17 +74,20 @@ class GFFentry():
 
     def get_gene(self):
         if self.strand == "-":
-            seq = self.genome.get_contig(self.seqname)[(self.start):(self.end+1)]
+            seq = self.gff.genome.get_contig(self.seqname)[(self.start):(self.end+1)]
             seq = seq.reverse_complement()
         else :
-            seq = self.genome.get_contig(self.seqname)[(self.start-1):(self.end)]
+            seq = self.gff.genome.get_contig(self.seqname)[(self.start-1):(self.end)]
         return seq
 
     def get_id(self):
         if "ID" not in self.attributes:
             raise ValueError("ID is not in the attributes of the feature you are looking for")
+        return self.attributes["ID"]
 
-    def get_amino_acids():
+    def get_amino_acids(self):
         if self.feature != "CDS":
             raise CantAminoAcidsError("the feature you are getting can't be translated")
-        return self.get_gene().translate()
+        gene = self.get_gene()
+        gene = gene[:(3*floor(len(gene)/3))]
+        return gene.translate()

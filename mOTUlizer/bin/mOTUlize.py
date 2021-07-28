@@ -10,6 +10,7 @@ from random import uniform
 import multiprocessing
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
+from mOTUlizer.errors import *
 from mOTUlizer.config import FASTA_EXTS
 from mOTUlizer.classes.MetaBin import MetaBin
 from mOTUlizer.classes.mOTU import mOTU
@@ -19,7 +20,7 @@ from mOTUlizer import __version__
 
 description_text = """
 From a set of genomes, makes metagenomic Operational Taxonomic Units (mOTUs). By default it makes a graph of 95%
-(reciprocal) ANI (with fastANI) connected MAGs (with completeness > 40%, contamination < 5%). The mOTUs will be the
+(reciprocal) ANI (with fastANI) connected MAGs (with completeness > 40%, redundancy < 5%). The mOTUs will be the
 connected components of this graph, to which smaller "SUBs" with ANI > 95%  are
 recruited.
 
@@ -47,44 +48,28 @@ def motulize(args):
     out_json = args.output
     prefix = args.prefix
     mag_complete = args.MAG_completeness
-    mag_contamin = args.MAG_contamination
+    mag_redundancy = args.MAG_redundancy
     sub_complete = args.SUB_completeness
-    sub_contamin = args.SUB_contamination
+    sub_redundancy = args.SUB_redundancy
     force = args.force
     threads = args.threads
     keep_simi = args.keep_simi_file
 
 
-    assert 0 < ani_cutoff < 100, "similarity cutoff needs to be between 0 and 100 (percent similarity)"
-    assert all([os.path.exists(f) for f in fnas.values()]), "one or some of your fnas don't exists"
-    assert not (len(fnas) == 0 and similarities is None), "you need to give at least either a list of genome FASTA-files ('--fnas' option) or a file with pariwise similarities ('--similarities' option)"
+    if not (0 < ani_cutoff < 100):
+        raise ValueError("similarity cutoff needs to be between 0 and 100 (percent similarity)")
+    if not all([os.path.exists(f) for f in fnas.values()]):
+        raise CantNucleotideError("one or some of your fnas don't exists")
+    if (len(fnas) == 0 and similarities is None):
+        raise CantNucleotideError("you need to give at least either a list of genome FASTA-files ('--fnas' option) or a file with pariwise similarities ('--similarities' option)")
 
     if similarities:
-        assert os.path.exists(similarities), "The file for similarities does not exists"
+        if not os.path.exists(similarities):
+            raise FileError("The file for similarities does not exists")
         keep_simi = None
     if original_file:
-        assert os.path.exists(original_file), "The file for checkm does not exists"
-
-
-    if similarities:
-        print("Loading similarities", file = sys.stderr)
-        dist_dict = {}
-        with open(similarities) as handle:
-            for l in handle:
-                if "query" not in l:
-                    ll = l.split("\t")
-                    if "." in ll[0] :
-                        g1 = ".".join(os.path.basename(ll[0]).split(".")[:-1]) if any([ll[0].endswith(ext) for ext in FASTA_EXTS]) else ll[0]
-                    else :
-                        g1 = ll[0]
-                    if "." in ll[1] :
-                        g2 = ".".join(os.path.basename(ll[1]).split(".")[:-1]) if any([ll[1].endswith(ext) for ext in FASTA_EXTS]) else ll[1]
-                    else :
-                        g2 = ll[1]
-                    dist = float(ll[2])
-                    dist_dict[(g1,g2)] = {'ani' : dist, 'subject_chunks' : None if len(ll) < 3 else float(ll[3]) , 'query_chunks' : None if len(ll) < 4 else float(ll[4]) }
-    else :
-        dist_dict = None
+        if not os.path.exists(original_file):
+            raise FileError("The file for checkm does not exists")
 
     if len(fnas) > 0 :
         genomes = set(fnas.keys())
@@ -105,19 +90,23 @@ def motulize(args):
         original_info = parse_checkm(original_file)
 
 
-    assert all([g in original_info  for g in genomes]), "you do not have completness/contamination info for all you bins, values missing for :" + ", ".join([g for g in genomes if g not in original_info][0:10]) + "... (only 10 first shown   )"
+    if not all([g in original_info  for g in genomes]):
+        raise ValueError("you do not have completness/redundancy info for all you bins, values missing for :" + ", ".join([g for g in genomes if g not in original_info][0:10]) + "... (only 10 first shown   )")
 
     if fnas == {}:
         fnas = {g : None for g in genomes}
 
     print("making bin-objects", file = sys.stderr)
 
-    all_bins = [MetaBin(name = g, nucleotide_file = fnas[g], complet = original_info[g]['Completeness'], contamin = original_info[g]['Contamination']) for g in genomes]
+    all_bins = [MetaBin(name = g, nucleotide_file = fnas[g], genome_completeness = original_info[g]['Completeness'], genome_redundancy = original_info[g]['Contamination']) for g in genomes]
 
     whole_set = mOTU(all_bins)
 
+    if similarities:
+        print("Loading similarities", file = sys.stderr)
+        whole_set.load_anis(similarities)
+
     if not dist_dict is None:
-        whole_set.load_anis(dist_dict)
     else:
         print("Similarities not provided, will compute them with fastANI", file = sys.stderr)
         if keep_simi and not force:
@@ -126,9 +115,11 @@ def motulize(args):
 
     print("making mOTUs", file = sys.stderr)
 
-    mOTUs = mOTU.cluster_MetaBins(whole_set, ani_cutoff, prefix, mag_complete, mag_contamin, sub_complete, sub_contamin, threads = threads )
+    mOTUs = mOTU.cluster_MetaBins(whole_set, ani_cutoff, prefix, mag_complete, mag_redundancy, sub_complete, sub_redundancy, threads = threads )
     if keep_simi :
         whole_set.export_anis(keep_simi)
+
+    motuID2motu = {motu.name : motu for motu in mOTUs}
 
     print("making stats", file = sys.stderr)
 
@@ -147,15 +138,15 @@ def motulize(args):
         'mean_ANI' : v['mean_ANI']['mean_ANI'],
         'min_ANI' : min([vv['ani'] for vv in v['ANIs'].values()]),
         'missing_edges' : v['mean_ANI']['missing_edges'],
-        'nb_MAGs' : len([g.name for g in m if g.original_complet > mag_complete and g.original_contamin < mag_contamin]),
-        'nb_SUBs' : len([g.name for g in m if g.original_complet <= mag_complete or g.original_contamin >= mag_contamin]),
-        'MAGs' : ";".join([g.name for g in m if g.original_complet > mag_complete and g.original_contamin < mag_contamin]),
-        'SUBs' : ";".join([g.name for g in m if g.original_complet <= mag_complete or g.original_contamin >= mag_contamin])
+        'nb_MAGs' : len([g.name for g in motuID2motu[k] if g.original_complet > mag_complete and g.original_redundancy < mag_redundancy]),
+        'nb_SUBs' : len([g.name for g in motuID2motu[k] if g.original_complet <= mag_complete or g.original_redundancy >= mag_redundancy]),
+        'MAGs' : ";".join([g.name for g in motuID2motu[k] if g.original_complet > mag_complete and g.original_redundancy < mag_redundancy]),
+        'SUBs' : ";".join([g.name for g in motuID2motu[k] if g.original_complet <= mag_complete or g.original_redundancy >= mag_redundancy])
 
         }
         short_out += [row]
 
-    genome_line = "genomes=" + ";".join(["{}:completeness={}:redundancy={}".format(k.name, k.original_complet, k.original_contamin) for v in out_dict.values() for k in m ])
+    genome_line = "genomes=" + ";".join(["{}:completeness={}:redundancy={}".format(k.name, k.original_complet, k.original_redundancy) for motu in mOTUs for k in motu ])
 
     outformat ="""#mOTUlizer:mOTUlize:{version}
 #prefix={name}
@@ -168,7 +159,8 @@ def motulize(args):
 
     if args.output:
         if not force:
-            assert not os.path.exists(args.output), "output file already exists, delete it or use '--force'"
+            if os.path.exists(args.output):
+                raise FileError("output file already exists, delete it or use '--force'")
         out_handle = open(out_json, "w")
     else :
         out_handle = sys.stdout
@@ -195,9 +187,9 @@ if __name__ == "__main__":
     parser.add_argument('--fnas','-F', nargs = '*', help = "list of nucleotide fasta-files of MAGs or whatnot")
     parser.add_argument('--prefix', '-n', nargs = '?', default = "mOTU_", help = "prefix for the mOTU names, default : mOTU_ ")
     parser.add_argument('--MAG-completeness', '--MC', '-M', nargs = '?', type=float, default = 40, help = "completeness cutoff for seed MAGs, default : 40")
-    parser.add_argument('--MAG-contamination', '--Mc', '-m', nargs = '?', type=float, default = 5, help = "contamination cutoff for seed MAGs, default : 5")
+    parser.add_argument('--MAG-redundancy', '--Mc', '-m', nargs = '?', type=float, default = 5, help = "redundancy cutoff for seed MAGs, default : 5")
     parser.add_argument('--SUB-completeness', '--SC', '-S', nargs = '?', type=float, default = 0, help = "completeness cutoff for recruited SUBs, default : 0")
-    parser.add_argument('--SUB-contamination', '--Sc', '-s', nargs = '?', type=float, default = 100, help = "contamination cutoff for recruited SUBs, default : 100")
+    parser.add_argument('--SUB-redundancy', '--Sc', '-s', nargs = '?', type=float, default = 100, help = "redundancy cutoff for recruited SUBs, default : 100")
     parser.add_argument('--similarity-cutoff', '-i', nargs = '?', type=float, default = 95, help = "distance cutoff for making the graph, default : 95")
     parser.add_argument('--threads', '-t', nargs = None, type = int , default = multiprocessing.cpu_count(), help = "number of threads (default all, e.g. {})".format(multiprocessing.cpu_count()))
     parser.add_argument('--keep-simi-file', '-K', nargs = '?', default = None, help = "keep generated similarity file if '--similarities' is not provided, does nothing if '--similarity' is provided")

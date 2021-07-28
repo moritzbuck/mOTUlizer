@@ -7,15 +7,12 @@ from os.path import join as pjoin
 import argparse
 import json
 from random import uniform
-
-#print("This is temporary, fix the hard-path once all is clean", file=sys.stderr)
-#sys.path.append("/home/moritz/projects/0039_mOTUlizer/")
-
 from mOTUlizer import __version__
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
 from mOTUlizer.classes.mOTU import mOTU
 import multiprocessing
+from mOTUlizer.classes.MetaBin import MetaBin
 
 #from mOTUlizer.config import *
 
@@ -27,21 +24,6 @@ Returns all to stdout by default.
 __checkm_default__ = 95
 
 def motupan(args):
-    if args.gene_clusters_file:
-        try :
-            with open(args.gene_clusters_file) as handle:
-                gene_clusters_dict = json.load(handle)
-        except :
-            try :
-                with open(args.gene_clusters_file) as handle:
-                    gene_clusters_dict = {l.split("\t")[0] : l[:-1].split("\t")[1:] for l in handle}
-            except :
-                print("Either the gene_clusters_file does not exists or it is not formated well", file = sys.stderr)
-        gene_clusters_dict = {k : set(v) for k,v in gene_clusters_dict.items()}
-        if all([len(v) == 0 for v in gene_clusters_dict]):
-            print("None of your bins have any gene_clusterss in them, that's weird, you probably have wrong delimiter in you file, use tab.\nIf you do not have COGs you can also just run it without the --gene_clusters_file option and mOTUlizer will automatically compute some!", file = sys.stderr)
-    else :
-        gene_clusters_dict = {}
 
     #parse and check your amino-acid files
     if args.txt and args.faas:
@@ -52,22 +34,11 @@ def motupan(args):
     else :
         faas = {}
 
-    assert all([os.path.exists(f) for f in faas.values()]), "one or some of your faas don't exists"
+    for f in faas.values():
+        if not os.path.exists(f):
+            raise FileError(f"one or some of your faas don't exists, more specifically {f}")
 
-
-    if len(faas) > 0 and args.gene_clusters_file:
-        genomes = set(faas.keys()).intersection(set(gene_clusters_dict.keys()))
-    elif len(faas) > 0:
-        genomes = set(faas.keys())
-    else :
-        genomes = set(gene_clusters_dict.keys())
-
-    if gene_clusters_dict and len(faas) > 0:
-        if len(genomes) != len(faas) or len(faas) != len(gene_clusters_dict):
-            print("your faas and gene_clusters_drct are not the same length,\nit might not matter just wanted to let you know.", file = sys.stderr)
-
-    if len(gene_clusters_dict) > 0 :
-        gene_clusters_dict = {g : gene_clusters_dict.get(g) for g in genomes if g in gene_clusters_dict}
+    genomes = list(faas)
 
     out_json = args.output
     checkm = {}
@@ -81,7 +52,8 @@ def motupan(args):
             print("you did not have completeness for all bins/genomes, abscent values have been put to default value, e.g. " + str(__checkm_default__), file = sys.stderr)
             checkm = {k : v if v  else __checkm_default__ for k,v in checkm.items()}
     elif args.length_seed :
-        checkm = "length_seed"
+        for f in genomes:
+            checkm[f] = None
     elif args.seed :
         for f in genomes:
             checkm[f] = args.seed
@@ -92,9 +64,10 @@ def motupan(args):
         for f in genomes:
             checkm[f] = __checkm_default__
 
+    nb_boots = args.boots
+
     threads = args.threads
     precluster = args.precluster
-    method = None if args.genome2gene_clusters_only else "default"
 
     name = args.name if args.name else random_name()
     name = (name + "_") if not name.endswith("_") else name
@@ -104,7 +77,16 @@ def motupan(args):
 
     print(len(genomes), " genomes in your clade", file = sys.stderr)
 
-    motu = mOTU( name = name , faas = faas , gene_clusters_dict = gene_clusters_dict, genome_completion_dict = checkm, max_it = max_it, threads = threads, precluster = precluster, method = method)
+    all_bins = [MetaBin(name = g, amino_acid_file = None if faas is None else faas[g], genome_completeness = checkm[g]) for g in genomes]
+
+
+    motu = mOTU( genomes = all_bins, name = name, threads = threads, precluster = precluster, make_gene_clustering = False if args.load_gene_clusters else True)
+
+    if args.load_gene_clusters:
+        print("Loading imported gene-clusters")
+        motu.load_gene_clusters(args.load_gene_clusters)
+
+    motu.compute_core(max_it = max_it)
 
     if args.output:
         out_handle = open(out_json, "w")
@@ -112,13 +94,15 @@ def motupan(args):
         out_handle = sys.stdout
     stats = motu.get_stats()
 
+    if args.save_gene_clusters:
+        motu.export_gene_clusters(args.save_gene_clusters)
+
+    motu.roc_values(boots=nb_boots)
     nb_boots = args.boots
-    if args.long and not args.genome2gene_clusters_only:
+    if args.long:
 
         stats[name].update(motu.roc_values(boots=nb_boots))
         json.dump(stats, out_handle, indent=4, sort_keys=True)
-    elif args.genome2gene_clusters_only :
-        json.dump({k : list(v) for k,v in motu.gene_clusters_dict.items()}, out_handle, indent=4, sort_keys=True)
     else :
         print(motu.pretty_pan_table(), file = out_handle)
     if args.output:
@@ -134,11 +118,11 @@ if __name__ == "__main__":
     parser.add_argument('--seed', '-s', type = float , nargs = '?', help = "seed completeness, advice a number around 90 ({} default), this is the default completeness prior".format(__checkm_default__))
     parser.add_argument('--length_seed', '--ls', action='store_true', help = "seed completeness by length fraction [0-100]")
     parser.add_argument('--random_seed', '--rs', action='store_true', help = "random seed completeness between 5 and 95 percent")
-    parser.add_argument('--genome2gene_clusters_only', action='store_true', help = "returns genome2gene_clusters only")
+    parser.add_argument('--save_gene_clusters', nargs = None, help = "saves the gene_clusters in an appropriate json-formated file")
     parser.add_argument('--precluster', action='store_true', default = False, help = "precluster proteomes with cd-hit, mainly for legacy reasons, mmseqs2 is faaaaaast")
     parser.add_argument('--faas','-F', nargs = '*', help = "list of amino-acids faas of MAGs or whatnot, or a text file with paths to the faas (with the --txt switch)")
     parser.add_argument('--txt', action='store_true', help = "the '--faas' switch indicates a file with paths")
-    parser.add_argument('--gene_clusters_file', '--gene_clusterss', '-c', nargs = '?', help = "file with COG-sets (see doc)")
+    parser.add_argument('--load_gene_clusters', '--gene_clusters', '-c', nargs = '?', help = "file with COG-sets (see doc)")
     parser.add_argument('--name', '-n', nargs = None, help = "if you want to name this bag of bins")
     parser.add_argument('--long', action='store_true', help = "longform output, a JSON-file with a lot more information (might be cryptic...)")
     parser.add_argument('--boots', '-b', nargs = None, type = int , default = 0 , help = "number of bootstraps for fpr and recall estimate (default 0), careful, slows down program linearly")
