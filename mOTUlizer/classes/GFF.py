@@ -74,7 +74,7 @@ class GFFentry():
 
     def get_gene(self):
         if self.strand == "-":
-            seq = self.gff.genome.get_contig(self.seqname)[(self.start):(self.end+1)]
+            seq = self.gff.genome.get_contig(self.seqname)[(self.start-1):(self.end)]
             seq = seq.reverse_complement()
         else :
             seq = self.gff.genome.get_contig(self.seqname)[(self.start-1):(self.end)]

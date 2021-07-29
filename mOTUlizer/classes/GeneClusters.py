@@ -4,12 +4,18 @@ import gzip
 from mOTUlizer.config import *
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
+from Bio.Seq import Seq
+import itertools
 from os.path import join as pjoin
 import shutil
 from mOTUlizer.errors import *
 from mOTUlizer.utils import random_name
 from mOTUlizer.classes.tools.Muscle import Muscle
+from mOTUlizer.classes.tools.FastTree import FastTree
+
 import json
+import re
+from tqdm import tqdm
 
 methods =  ['silixCOGs', 'mmseqsCluster']
 class GeneClusters():
@@ -270,8 +276,10 @@ class GeneCluster():
         self.representative = representative
         self.gene2genome = genes2genome
         self._genomes = None
+        self._genome2genes = None
         self.set_storage(storage)
         self.quiet = quiet
+        self._mutation_dict = None
 
     def set_storage(self, storage):
         if storage:
@@ -283,6 +291,7 @@ class GeneCluster():
         else :
             self.storage = None
 
+
     def __len__(self):
         return len(self.genes)
 
@@ -292,10 +301,24 @@ class GeneCluster():
                  'representative' : self.representative
                }
 
-    def get_genomes(self):
+    def get_genes(self, genome = None):
+        if not self._genome2genes:
+            self._genome2genes = {genome : [] for genome in self._genomes}
+            for gene, genomes in self.gene2genome.items():
+                for genome in genomes:
+                    self._genome2genes[genome].append(gene)
+        if gene:
+            return self._genome2genes[genome]
+        return set(self.genes)
+
+
+    def get_genomes(self, gene = None):
         if not self._genomes:
             self._genomes = {gg for g in self.gene2genome.values() for gg in g}
+        if gene:
+            return self.gene2genomes[gene]
         return self._genomes
+
 
     def get_seqs(self):
         seqs = dict()
@@ -304,6 +327,8 @@ class GeneCluster():
         return seqs
 
     def get_alignment(self, method = "muscle"):
+        if len(self) < 2 :
+            raise CantRunError("Making alignments for clusters with only one gene makes little sense...")
         if self.storage:
             out_file = pjoin(self.storage, "alignment.fasta")
         else :
@@ -321,8 +346,93 @@ class GeneCluster():
         ali = tool.parse_output()
         return ali
 
-    def ali2codon(self):
-        codoned = {gid for gid in self.genes}
+    def alignment_with_codons(self, write = False):
+        codoned = {gid : dict() for gid in self.genes}
+        if write and not self.storage:
+            raise FileError("You want to write the codon alignment but you have no storage folder for your gene-cluster")
         for gid, allied in self.get_alignment().items():
             seq = self.gene2genome[gid][0].get_gene(gid)
-        return seq
+            # a little dance to replace trailing and leadin "-" by X, I do not want to count them in the ANI also, add a stop
+            allied = allied.rstrip("*")
+            cleaned = allied.rstrip("-")
+            trailing_gap = (len(allied) - len(cleaned))
+            paded = cleaned + "X" * trailing_gap
+            cleaned = paded.lstrip("-")
+            leading_gap = (len(paded) - len(cleaned))
+            allied = "X" * leading_gap + "*" + cleaned
+            codons = re.findall('...', str(seq))
+            assert len(allied.ungap("-").ungap("X")) == len(codons)
+            codons = ["XXX"]  * leading_gap + codons[:-1] + ["XXX"] * trailing_gap + [codons[-1]]
+            counter = 0
+            for aa in allied:
+                if aa == "-":
+                    codons = codons[0:counter] + ["---"] + codons[counter:]
+                counter += 1
+            assert len(codons) == len(allied)
+            codoned[gid]['AAs'] = allied
+            codoned[gid]['codons'] = codons
+        if write :
+            SeqIO.write([SeqRecord(id = gid, description = "", seq = Seq("".join(v['codons']))) for gid, v in codoned.items()], pjoin(self.storage, "alignment_codons.fasta"), "fasta")
+        return codoned
+
+    @classmethod
+    def _compare_two_seqs(cls,ali1, ali2):
+        aa1, codon1 = (ali1['AAs'],ali1['codons'])
+        aa2, codon2 = (ali2['AAs'],ali2['codons'])
+        synonymous_muts = 0
+        non_synonymous_muts = 0
+        counted_bases = 0
+        for i in range(len(aa1)):
+            if codon1[i] != "XXX" or codon2[i] != "XXX":
+                if codon1[i] != "---" and codon2[i] != "---":
+                    counted_bases += 1
+                    if codon1[i] != codon2[i]:
+                        if aa1[i] == aa2[i]:
+                            synonymous_muts += 1
+                        else :
+                            non_synonymous_muts += 1
+        return {'synonymous_muts' : synonymous_muts, 'non_synonymous_muts' : non_synonymous_muts, 'counted_bases' : counted_bases}
+
+
+    def within_cluster_mutations(self, write = False):
+        if not self._mutation_dict:
+            alignment = self.alignment_with_codons(write = write)
+            ali_len = len(next(iter(alignment.values()))['AAs'])
+            assert all([len(v['AAs']) == ali_len for v in alignment.values()])
+            pairs = itertools.permutations(alignment.keys(), 2)
+            self._mutation_dict = {p : GeneCluster._compare_two_seqs(alignment[p[0]], alignment[p[1]]) for p in pairs}
+        return self._mutation_dict
+
+    def synonymous_rate(self):
+        return sum([v['synonymous_muts'] for v in self.within_cluster_mutations().values()])/sum([v['counted_bases'] for v in self.within_cluster_mutations().values()])
+
+    def non_synonymous_rate(self):
+        return sum([v['non_synonymous_muts'] for v in self.within_cluster_mutations().values()])/sum([v['counted_bases'] for v in self.within_cluster_mutations().values()])
+
+    def tree(self, seq_type = "nucl", method = "fasttree"):
+        ali = self.alignment_with_codons()
+        nucl_seq = lambda data : Seq("".join([ codon.replace("X","-") for codon in data['codons'] ]))
+        aa_seq = lambda data : Seq("".join([ "-" if aa == "X" else aa for aa in str(data['AAs']) ]))
+
+        if self.storage:
+            out_file = pjoin(self.storage, "tree.nwk")
+        else :
+            out_file = None
+        if method == "fasttree":
+            if seq_type == "nucl":
+                seqs = {gid :  nucl_seq(data) for gid, data in ali.items()}
+            elif seq_type == "aas":
+                seqs = {gid :  aa_seq(data) for gid, data in ali.items()}
+            else :
+                raise CantMethodError(f"You can only align 'nucl' or 'aas', you tried {seq_type}")
+            tool = FastTree(seqsdict_or_infile = seqs, out_file = out_file, quiet = self.quiet)
+        else :
+            raise CantMethodError(f"The treemaking method ({method}) you asked for is not implemented yet.")
+
+        if out_file and not os.path.exists(out_file):
+            tool.run_command()
+        elif not self.quiet:
+            print("Alignment loaded from file", file = sys.stderr)
+
+        tree = tool.parse_output()
+        return tree
