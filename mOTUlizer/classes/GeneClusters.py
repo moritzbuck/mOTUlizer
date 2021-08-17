@@ -58,6 +58,8 @@ class GeneClusters():
         self._clust_set = None
 
 
+    def intersection(self, other_cluster):
+        return self.get_clust_set().intersection(other_cluster.get_clust_set())
 
     def get_genecluster_counts(self):
         return {g : len(g.get_genomes()) for g in self}
@@ -211,7 +213,7 @@ class GeneClusters():
             "coverage = 80% with cov-mode = 0, minimal amino acid sequence identity = 80% and cluster-mode = 0"
             covmode = kwargs.get("mmseqsCluster_covmode",0)
             cov = kwargs.get("mmseqsCluster_cov",0.80)
-            seqid = kwargs.get("mmseqsCluster_seqid",0.80)
+            seqid = kwargs.get("mmseqsCluster_seqid",0.0)
 
             if not shutil.which("mmseqs"):
                 print("You need mmseqs2 to run the silix gene-clustering, either install it or run mOTUpan with an other gene-clustering or your own traits", file = sys.stderr)
@@ -219,7 +221,7 @@ class GeneClusters():
 
             print("running mmseqs easy-cluster with params --min-seq-id {seqid} --cov-mode {covmode} -c {cov} in {}".format(temp_folder, covmode = covmode, cov = cov, seqid=seqid), file = sys.stderr)
             mmseqs_dat = pjoin(temp_folder, "mmseqs_")
-            os.system("mmseqs easy-cluster --threads {threads} --min-seq-id {seqid} --cov-mode {covmode} -c {cov} {faas} {out} {tmp} 2> /dev/null > /dev/null".format(covmode = covmode, cov = cov, seqid=seqid, faas = all_faas_file, out = mmseqs_dat, tmp = temp_folder, threads = threads))
+            os.system("mmseqs easy-cluster --threads {threads}  --min-seq-id {seqid} --cov-mode {covmode} -c {cov} {faas} {out} {tmp} 2> /dev/null > /dev/null".format(covmode = covmode, cov = cov, seqid=seqid, faas = all_faas_file, out = mmseqs_dat, tmp = temp_folder, threads = threads))
 
             with open(mmseqs_dat + "_cluster.tsv") as handle:
                 if precluster:
@@ -247,7 +249,7 @@ class GeneClusters():
 
         shutil.rmtree(temp_folder)
 
-        clusts = [GeneCluster({g : prot2genome[g] for g in genes}, gene_clusters2rep[clust], name = clust, storage = None if not storage else (storage + "clusters/") ) for clust, genes in clst2gene.items()]
+        clusts = [GeneCluster({g : prot2genome[g] for g in genes}, gene_clusters2rep[clust], name = clust, storage = None if not storage else pjoin(storage, "clusters/" )) for clust, genes in clst2gene.items()]
         return GeneClusters(motus, clusts, storage )
 #        return { 'genome2gene_clusterss' : genome2gene_clusters, 'aa2gene_clusters' : recs, 'gene_clusters2rep' : gene_clusters2rep}
 
@@ -307,7 +309,7 @@ class GeneCluster():
             for gene, genomes in self.gene2genome.items():
                 for genome in genomes:
                     self._genome2genes[genome].append(gene)
-        if gene:
+        if genome:
             return self._genome2genes[genome]
         return set(self.genes)
 
@@ -359,9 +361,9 @@ class GeneCluster():
             paded = cleaned + "X" * trailing_gap
             cleaned = paded.lstrip("-")
             leading_gap = (len(paded) - len(cleaned))
-            allied = "X" * leading_gap + "*" + cleaned
+            allied = "X" * leading_gap  + cleaned + "*"
             codons = re.findall('...', str(seq))
-            assert len(allied.ungap("-").ungap("X")) == len(codons)
+#            assert len(allied.ungap("-")[:-1].strip("X")) == len(codons[:-1])
             codons = ["XXX"]  * leading_gap + codons[:-1] + ["XXX"] * trailing_gap + [codons[-1]]
             counter = 0
             for aa in allied:
@@ -382,16 +384,19 @@ class GeneCluster():
         synonymous_muts = 0
         non_synonymous_muts = 0
         counted_bases = 0
+        codon_diff = lambda a,b : sum([m != n for m,n in zip(a,b)])
+        transitions = []
         for i in range(len(aa1)):
             if codon1[i] != "XXX" or codon2[i] != "XXX":
                 if codon1[i] != "---" and codon2[i] != "---":
-                    counted_bases += 1
+                    counted_bases += 3
                     if codon1[i] != codon2[i]:
                         if aa1[i] == aa2[i]:
-                            synonymous_muts += 1
+                            synonymous_muts += codon_diff(codon1[i],codon2[i])
                         else :
-                            non_synonymous_muts += 1
-        return {'synonymous_muts' : synonymous_muts, 'non_synonymous_muts' : non_synonymous_muts, 'counted_bases' : counted_bases}
+                            non_synonymous_muts += codon_diff(codon1[i],codon2[i])
+                            transitions += [set([aa1[i], aa2[i]])]
+        return {'synonymous_muts' : synonymous_muts, 'non_synonymous_muts' : non_synonymous_muts, 'counted_bases' : counted_bases, 'transitions' : transitions}
 
 
     def within_cluster_mutations(self, write = False):
@@ -399,7 +404,8 @@ class GeneCluster():
             alignment = self.alignment_with_codons(write = write)
             ali_len = len(next(iter(alignment.values()))['AAs'])
             assert all([len(v['AAs']) == ali_len for v in alignment.values()])
-            pairs = itertools.permutations(alignment.keys(), 2)
+            pairs = { frozenset(k) for k in itertools.permutations(alignment.keys(), 2)}
+            pairs = [tuple(p) for p in pairs]
             self._mutation_dict = {p : GeneCluster._compare_two_seqs(alignment[p[0]], alignment[p[1]]) for p in pairs}
         return self._mutation_dict
 

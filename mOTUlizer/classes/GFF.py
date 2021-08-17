@@ -24,9 +24,9 @@ class GFF():
 
         with open(gff_file) as handle:
             for l in handle:
-                if l.startswith("##FASTA"):
+                if l.startswith("##FASTA") or l == "\n":
                     break
-                elif not l.startswith("##"):
+                elif not l.startswith("#"):
                     self.entries.append(GFFentry(l.strip(), self))
         self.cdss = {e.attributes["ID"] : e for e in self.entries if e.feature == "CDS"}
 
@@ -70,14 +70,19 @@ class GFFentry():
         except :
             self.score = None
 
-        self.attributes = {l.split('=')[0] : l.split('=')[1]for l in line[8].split(";")}
+        self.attributes = {l.split('=')[0] : l.split('=')[1]for l in line[8].split(";") if l != ""}
 
     def get_gene(self):
         if self.strand == "-":
             seq = self.gff.genome.get_contig(self.seqname)[(self.start-1):(self.end)]
             seq = seq.reverse_complement()
+            if seq[-3:].translate() != "*":
+                seq += self.gff.genome.get_contig(self.seqname)[(self.start-4):(self.start-1)].reverse_complement()
         else :
             seq = self.gff.genome.get_contig(self.seqname)[(self.start-1):(self.end)]
+            if seq[-3:].translate() != "*":
+                seq += self.gff.genome.get_contig(self.seqname)[(self.end):(self.end+4)]
+#        assert len(seq) % 3 == 0
         return seq
 
     def get_id(self):

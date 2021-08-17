@@ -46,10 +46,6 @@ class mOTU:
 
         self.genome_id2genome = {g.name : g for g in self}
         self._core_computed = False
-        if  1 < sum([g.original_complet is None for g in self]) < len(self)-1 :
-            self.merens_trick()
-        if any([not g.original_complet for g in self]):
-            self.estimate_complete_from_length()
 
         if make_gene_clustering:
             if self.gene_clusters and not kwargs.get('force', False):
@@ -58,10 +54,21 @@ class mOTU:
             threads = kwargs.get('threads', multiprocessing.cpu_count())
             self.gene_clusters = GeneClusters.compute_GeneClusters([self], name = name, precluster = precluster, threads = threads, storage = None if not self.storage else pjoin(self.storage, "gene_clusters"))
 
+        if  1 < sum([g._original_complet is None for g in self]) < len(self)-1 :
+            self.merens_trick()
+        if self.gene_clusters and any([not g._original_complet for g in self]):
+            self.estimate_complete_from_length()            
+
         if compute_core:
             max_it = kwargs.get('motupan_maxit', 100)
             method = kwargs.get('motupan_method', 'motupan_v0_3_2')
             self.compute_core(method, max_it)
+
+    def estimate_complete_from_length(self):
+        max_len = max([len(g.gene_clusters) for g in self])
+        for g in self:
+            g.set_completeness(100*len(g.gene_clusters)/max_len)
+
 
     def load_gene_clusters(self, file, force = False):
         self.gene_clusters = GeneClusters.load(file, self, force = force, storage = None if not self.storage else pjoin(self.storage, "gene_clusters"))
@@ -183,26 +190,26 @@ class mOTU:
     def get_representative(self, method = "complex", max_redund = 5, min_complete = 95):
             tt = [v.get_data() for v in self]
             data = { t['name'] : t for t in tt}
-            if all([v['original_contamin'] > max_redund for v in data.values()]):
-                return max( [ (k , v['original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
-            data = {k : v for k,v in data.items() if v['original_contamin'] < max_redund}
-            if any([v['original_complet'] > min_complete for v in data.values()])  :
-                data = {k : v for k,v in data.items() if v['original_complet'] > min_complete}
-                best_redund = min(data.items(), key = lambda x : x[1]['original_contamin'])[1]['original_contamin']
-                return max( [ (k , v['original_complet']) for k,v in data.items() if v['original_contamin'] == best_redund], key = lambda x: x[1])[0]
+            if all([v['original_redundancy'] > max_redund for v in data.values()]):
+                return max( [ (k , v['_original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
+            data = {k : v for k,v in data.items() if v['original_redundancy'] < max_redund}
+            if any([v['_original_complet'] > min_complete for v in data.values()])  :
+                data = {k : v for k,v in data.items() if v['_original_complet'] > min_complete}
+                best_redund = min(data.items(), key = lambda x : x[1]['original_redundancy'])[1]['original_redundancy']
+                return max( [ (k , v['_original_complet']) for k,v in data.items() if v['original_redundancy'] == best_redund], key = lambda x: x[1])[0]
             else:
-                return max( [ (k , v['original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
+                return max( [ (k , v['_original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
 
     # def get_representative(tt, max_redund = 5, min_complete = 95):
     #         data = { t['name'] : t for t in tt}
     #
     #         data = {k : v for k,v in data.items() if v['original_contamin'] < max_redund}
-    #         if any([v['original_complet'] > min_complete for v in data.values()])  :
-    #             data = {k : v for k,v in data.items() if v['original_complet'] > min_complete}
+    #         if any([v['_original_complet'] > min_complete for v in data.values()])  :
+    #             data = {k : v for k,v in data.items() if v['_original_complet'] > min_complete}
     #             best_redund = min(data.items(), key = lambda x : x[1]['original_contamin'])[1]['original_contamin']
     #             return min( [ (k , v['original_contamin']) for k,v in data.items() if v['original_contamin'] == best_redund], key = lambda x: x[1])[0]
     #         elif len(data) >0 :
-    #             return max( [ (k , v['original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
+    #             return max( [ (k , v['_original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
     #         else :
     #             return None
 
@@ -251,7 +258,7 @@ class mOTU:
             pp =  "\nYour {name}-run for {nb_mags} genomes (with mean initial completeness {mean_start:.2f}) resulted\n"
             pp += "in a core of {core_len} traits with a total sum of loglikelihood-ratios {llhr:.2f} and a corrected \n"
             pp += "mean completness of {mean_new:.2f}, resulting to a estimated mean traits per genome count of {trait_count:.2f}\n"
-            pp = pp.format(name = self.name, nb_mags = len(self), core_len = core_len, mean_start = mean([b.original_complet for b in self]),
+            pp = pp.format(name = self.name, nb_mags = len(self), core_len = core_len, mean_start = mean([b._original_complet for b in self]),
                         mean_new =  mean([b.new_completness for b in self]), llhr =  sum([l if l > 0 else -l for l in likelies.values()]),
                         trait_count = mean([100*len(b.gene_clusters)/b.new_completness for b in self]))
             print(pp, file = sys.stderr)
@@ -261,7 +268,7 @@ class mOTU:
         return likelies
 
     def _core_prob(self, gene_cluster, complet = "checkm"):
-        comp = lambda mag : (mag.original_complet if complet =="checkm" else mag.new_completness)/100
+        comp = lambda mag : (mag._original_complet if complet =="checkm" else mag.new_completness)/100
         presence = [log10(comp(mag)) for mag in self if gene_cluster in mag.get_clust_set()]
         abscence = [log10(1 - comp(mag)) for mag in self if gene_cluster not in mag.get_clust_set()]
         return sum(presence + abscence)
@@ -274,7 +281,7 @@ class mOTU:
     def _pange_prob(self, gene_cluster, core_size, complet = "checkm"):
 #        pool_size = sum(self.gene_clustersCounts.values())
         pool_size = self.get_genecluster_poolsize()
-        comp = lambda mag : (mag.original_complet if complet =="checkm" else mag.new_completness)/100
+        comp = lambda mag : (mag._original_complet if complet =="checkm" else mag.new_completness)/100
         #presence = [1 - (1-self.gene_clustersCounts[gene_clusters]/pool_size)**(len(mag.gene_clusterss)-(core_size*comp(mag))) for mag in self if gene_clusters in mag.gene_clusterss]
         #abscence = [ (1-self.gene_clustersCounts[gene_clusters]/pool_size)**(len(mag.gene_clusterss)-(core_size*comp(mag))) for mag in self if gene_clusters not in mag.gene_clusterss]
 
@@ -328,7 +335,7 @@ class mOTU:
             v['genomes'] = ";".join(v['genomes'])
 
         header = ['trait_name','type', 'genome_occurences', 'log_likelihood_to_be_core', 'mean_copy_per_genome','genomes', 'genes']
-        genome_line = "genomes=" + ";".join(["{}:prior_complete={}:posterior_complete={}".format(k.name, k.original_complet, k.new_completness) for k in self])
+        genome_line = "genomes=" + ";".join(["{}:prior_complete={}:posterior_complete={}".format(k.name, k._original_complet, k.new_completness) for k in self])
         mean = lambda l : sum([ll for ll in l])/len(l)
 
         if stats['mean_recall'] != "NA":
@@ -364,7 +371,7 @@ class mOTU:
             name = self.name.strip("_"),
             core_len = len(self.core),
             genomes=genome_line,
-            prior_complete=mean([b.original_complet for b in self]),
+            prior_complete=mean([b._original_complet for b in self]),
             post_complete=mean([b.new_completness for b in self]),
             SALLHR= -1 if not self.likelies else sum([l if l > 0 else -l for l in self.likelies.values()]),
             size=mean([100*len(b.gene_clusters)/b.new_completness for b in self]),
@@ -409,7 +416,7 @@ class mOTU:
         head = ["query" , "reference" , "ani" , "query_chunks" , "reference_chunks"]
         with open(file_path,"w") as handle:
             handle.writelines(["\t".join(head) + "\n"] + [f"{k[0].name}\t{k[1].name}\t{v['ani']}\t{v['query_chunks']}\t{v['reference_chunks']}\n" for k,v in self.get_anis().items() ] )
-    def get_anis(self, method = "fastANI", block_size = 500, threads=1):
+    def get_anis(self, method = "fastANI", block_size = 500, threads=20):
         if not hasattr(self, 'anis'):
             if method == "fastANI":
                 if not shutil.which('fastANI'):
@@ -465,7 +472,7 @@ class mOTU:
             self.anis = {(self.genome_id2genome[k[0]], self.genome_id2genome[k[1]]) : v for k,v in out_dists.items()}
         return self.anis
 
-    def cluster_MetaBins(self, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_contamin = 5, sub_complete = 0, sub_contamin = 100, threads = 1):
+    def cluster_MetaBins(self, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_redundancy = 5, sub_complete = 0, sub_redundancy = 100, threads = 1):
         import igraph
 
         dist_dict = self.get_anis(threads = threads)
@@ -475,8 +482,8 @@ class mOTU:
 
         all_bins = {a.name : a for a in self}
 
-        good_mag = lambda b : b.original_complet > mag_complete and b.original_contamin < mag_contamin
-        decent_sub = lambda b : b.original_complet > sub_complete and b.original_contamin < sub_contamin and not good_mag(b)
+        good_mag = lambda b : b._original_complet > mag_complete and b.original_redundancy < mag_redundancy
+        decent_sub = lambda b : b._original_complet > sub_complete and b.original_redundancy < sub_redundancy and not good_mag(b)
         good_pairs = [k for k,v  in dist_dict.items() if v['ani'] > ani_cutoff and dist_dict.get((k[1],k[0]), 0)['ani'] > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
         species_graph = igraph.Graph()
         vertexDeict = { v : i for i,v in enumerate(set([x for k in good_pairs for x in k]))}

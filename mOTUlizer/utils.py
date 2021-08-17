@@ -7,6 +7,20 @@ def random_name(stringLength=8):
     letters = string.ascii_uppercase
     return ''.join(random.choice(letters) for i in range(stringLength))
 
+def compute_theoretical_diff_ratio():
+    from Bio.Seq import Seq
+    alphabet = {'A', 'T', 'C', 'G'}
+    all_codons = [Seq(a + b + c) for a in alphabet for b in alphabet for c in alphabet]
+    possible_muts = lambda codon: [codon[:i] + base + codon[i+1:] for i in range(3) for base in alphabet if base != codon[i]]
+    syn = 0
+    non_syn = 0
+    for codon in all_codons:
+        aa = str(codon.translate())
+        for p in possible_muts(codon):
+            if str(p.translate()) == aa:
+                syn += 1
+            else :
+                non_syn += 1
 
 def parse_checkm(file):
     # Should be able to read old checkm files, new checkm files  (e.g. checkm lineage_wf infolder datfolder > checkm_file)

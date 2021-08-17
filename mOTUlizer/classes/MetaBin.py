@@ -11,9 +11,9 @@ from mOTUlizer.classes.GFF import GFF
 
 class MetaBin:
     def __repr__(self) :
-        return "< bin {name} with {n} gene_clusters >".format(n = len(self.gene_clustering) if self.gene_clustering else "NA", name = self.name)
+        return "< bin {name} with {n} gene_clusters >".format(n = len(self.gene_clusters) if self.gene_clusters else "NA", name = self.name)
 
-    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, genome_completeness = 100, genome_redundancy = 0):
+    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, genome_completeness = None, genome_redundancy = 0):
         self.can_haz_gene_clusters = True
         self.name = name
         self.gene_clusters = None
@@ -24,12 +24,18 @@ class MetaBin:
         self._contigs = None
         self.gff_file = gff_file
         self.gff = None
-        self.original_complet = genome_completeness
+        self._original_complet = genome_completeness
         self.original_redundancy = genome_redundancy
-        if self.original_complet and self.original_complet > MAX_COMPLETE:
-            self.original_complet =  MAX_COMPLETE
+        if self._original_complet and self._original_complet > MAX_COMPLETE:
+            self._original_complet =  MAX_COMPLETE
         self.new_completness = None
-        self.gene_clustering = None
+        self.gene_clusters = None
+
+    def set_completeness(self, value):
+        self._original_complet = value if value < MAX_COMPLETE else MAX_COMPLETE
+
+    def get_completeness(self):
+        return self._original_complet
 
     def get_clust_set(self):
         return self.gene_clusters.get_clust_set()
@@ -65,6 +71,7 @@ class MetaBin:
                 self.amino_acids = { feat.get_id() : feat.get_amino_acids() for feat in self.get_gff() if feat.feature == "CDS"}
             else :
                 self.amino_acids = {s.id : s.seq for s in SeqIO.parse(self.amino_acid_file, "fasta")}
+            self.amino_acids = {k : v for k, v in self.amino_acids.items() if "*" not in v.rstrip("*") and v.endswith("*")}
         return self.amino_acids
 
     def get_gff(self):
@@ -92,15 +99,53 @@ class MetaBin:
         return { 'name' : self.name,
                  'faa-file' : self.amino_acid_file,
                  'fna-file' : self.nucleotide_file,
-                 'original_complet' : self.original_complet,
+                 '_original_complet' : self._original_complet,
                  'original_redundancy' : self.original_redundancy,
                  'new_completness' : self.new_completness,
         }
-
+    def bin_size(self):
+        return sum([len(c) for c in self.get_contigs().values()])
 
     def overlap(self, target):
-        return self.gene_clustering.intersection(target.gene_clustering)
+        return self.gene_clusters.intersection(target.gene_clusters)
 
     def estimate_nb_gene_clusters(self):
         assert self.new_completness != None, "new_completness not computed, please do"
-        return 100*len(self.gene_clustering)/self.new_completness
+        return 100*len(self.gene_clusters)/self.new_completness
+
+    def gene_cluster_ani(self, other_bin):
+        tocompare = self.gene_clusters.intersection(other_bin.gene_clusters)
+        tocompare = [c for c in tocompare if len(c.get_genes(self)) > 0 and len(c.get_genes(other_bin)) > 0 and len(c) > 2]
+        out_pairs = []
+        for c in tocompare:
+            simis = c.within_cluster_mutations()
+            genes1 = c.get_genes(self)
+            genes2 = c.get_genes(other_bin)
+            pairs = {frozenset({g1,g2}) for g1 in genes1 for g2 in genes2 if g1 != g2}
+            pairs = [tuple(p) for p in pairs]
+            simis = {p : simis.get(p, simis.get((p[1],p[0]))) for p in pairs if p in simis or (p[1],p[0]) in simis}
+            if len(simis) >1:
+                for i in range(min(len(genes1), len(genes2))):
+                    if len(simis) >1 :
+                        best_pair = min(simis.items(), key = lambda ite: (ite[1]['synonymous_muts']+ite[1]['non_synonymous_muts'])/ite[1]['counted_bases'])
+                        out_pairs.append(best_pair[1])
+                        for p in list(simis):
+                            if best_pair[0][0] in p or best_pair[0][1] in p:
+                                del simis[p]
+            if len(simis) == 1 :
+                out_pairs.append(list(simis.items())[0][1])
+        out_data = {
+        'nb_gene_pairs'                  : len(out_pairs),
+        'total_bases'                    : sum([k['counted_bases'] for k in out_pairs]),
+        'total_non_synonymous_mutations' : sum([k['non_synonymous_muts'] for k in out_pairs]),
+        'total_synonymous_mutations'     : sum([k['synonymous_muts'] for k in out_pairs])
+         }
+        if out_data['total_bases'] != 0:
+            out_data['ani'] = 1-(out_data['total_synonymous_mutations']+out_data['total_non_synonymous_mutations'])/out_data['total_bases']
+            out_data['nonsyn_ani'] = (out_data['total_non_synonymous_mutations']/out_data['total_bases'])/(1-out_data['ani'])
+            out_data['syn_cont'] = (out_data['total_synonymous_mutations']/out_data['total_bases'])/(1-out_data['ani'])
+        else :
+            out_data['ani']= None
+            out_data['nonsyn_cont']= None
+            out_data['syn_cont'] = None
+        return out_data
