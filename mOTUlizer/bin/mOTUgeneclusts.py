@@ -6,11 +6,13 @@ import os
 import time
 from numpy import mean
 import pandas
+import multiprocessing as mp
+print("Number of processors: ", mp.cpu_count())
 
 
 folder = "example_files/aquadb_mOTU_00113/"
-ffolder = "/home/moritz/temp/prochloros/fnas/"
-gfolder = "/home/moritz/temp/prochloros/gffs/"
+ffolder = "/home/moritz/temp/pnecs/fnas/"
+gfolder = "/home/moritz/temp/pnecs/gffs/"
 
 fnas = { f[:-4] : ffolder + f for f in os.listdir(ffolder) if f.endswith(".fna")}
 gffs = { f[:-4] : gfolder + f for f in os.listdir(gfolder) if f.endswith(".gff")}
@@ -22,20 +24,32 @@ for g in tqdm(fnas):
 #    _ = test.get_amino_acids()
     genomes.append(test)
 
-tt = mOTU(name = "prochloros", genomes = genomes, make_gene_clustering = True, thread=20, storage = "/home/moritz/temp/prochloros/motusuite_data/")
-tt.export_gene_clusters(file = "/home/moritz/temp/prochloros/motusuite_data/gene_clusters.json")
-#tt = mOTU(name = "test", genomes = genomes, storage = "/home/moritz/temp/test_motusuite/")
-#tt.load_gene_clusters("/home/moritz/temp/prochloros/motusuite_data/gene_clusters.json")
+#tt = mOTU(name = "pnecs", genomes = genomes, make_gene_clustering = True, thread=20, storage = "/home/moritz/temp/pnecs/motusuite_data/")
+#tt.export_gene_clusters(file = "/home/moritz/temp/pnecs/motusuite_data/gene_clusters.json")
+tt = mOTU(name = "test", genomes = genomes, storage = "/home/moritz/temp/test_motusuite/")
+tt.load_gene_clusters("/home/moritz/temp/pnecs/motusuite_data/gene_clusters.json")
 
 for t in tqdm(tt.gene_clusters):
     if len(t) > 1:
         _ = t.within_cluster_mutations()
 lazy_div = lambda a,b : None if b == 0 else a/b
 
+non_single_genes = [t for t in tt.gene_clusters if len(t) > 1]
 genomes = [g for g in tt]
 
 dat = {frozenset({genome1.name, genome2.name}) : genome1.gene_cluster_ani(genome2) for genome1 in tqdm(genomes) for genome2 in tqdm(genomes) if genome1 != genome2}
 tt.compute_core()
+
+gc_data = {}
+for g in tqdm(non_single_genes):
+    gc_data[g.name] = {}
+    gc_data[g.name]['prevalence'] = len(g.get_genomes())/len(tt)
+    gc_data[g.name]['core'] = g in tt.core
+    mut_data = g.within_cluster_mutations()
+    gc_data[g.name]['mean_dNdSp1'] = mean([ v['synonymous_muts']/(v['non_synonymous_muts']+1) for v in mut_data.values()])
+    gc_data[g.name]['mean_ANI'] = mean([(v['synonymous_muts']+v['non_synonymous_muts'])/v['counted_bases'] for v in mut_data.values()])
+
+
 anis = tt.get_anis(threads = 24)
 
 anis = {frozenset((k[0].name, k[1].name)) : v['ani'] for k, v in anis.items() if k[1] != k[0]}
@@ -54,7 +68,7 @@ for k,v in dat.items():
 
 bmft = pandas.DataFrame.from_dict(dat, orient="index")
 bmft.index = [";".join(t) for t in bmft.index]
-bmft.to_csv("~/temp/prochloros.csv", index_label='pairs')
+bmft.to_csv("~/temp/pnecs.csv", index_label='pairs')
 
 
 

@@ -385,7 +385,7 @@ class GeneCluster():
         non_synonymous_muts = 0
         counted_bases = 0
         codon_diff = lambda a,b : sum([m != n for m,n in zip(a,b)])
-        transitions = []
+        transitions = ""
         for i in range(len(aa1)):
             if codon1[i] != "XXX" or codon2[i] != "XXX":
                 if codon1[i] != "---" and codon2[i] != "---":
@@ -395,7 +395,7 @@ class GeneCluster():
                             synonymous_muts += codon_diff(codon1[i],codon2[i])
                         else :
                             non_synonymous_muts += codon_diff(codon1[i],codon2[i])
-                            transitions += [set([aa1[i], aa2[i]])]
+                            transitions += "".join(sorted([aa1[i], aa2[i]]))
         return {'synonymous_muts' : synonymous_muts, 'non_synonymous_muts' : non_synonymous_muts, 'counted_bases' : counted_bases, 'transitions' : transitions}
 
 

@@ -17,7 +17,7 @@ from mOTUlizer.classes.MetaBin import MetaBin
 from mOTUlizer.classes.GeneClusters import *
 from mOTUlizer.config import *
 
-mean = lambda x : sum(x)/len(x)
+mean = lambda x : "NA"  if "NA" in x else sum(x)/len(x)
 
 class mOTU:
     def __len__(self):
@@ -57,7 +57,7 @@ class mOTU:
         if  1 < sum([g._original_complet is None for g in self]) < len(self)-1 :
             self.merens_trick()
         if self.gene_clusters and any([not g._original_complet for g in self]):
-            self.estimate_complete_from_length()            
+            self.estimate_complete_from_length()
 
         if compute_core:
             max_it = kwargs.get('motupan_maxit', 100)
@@ -103,9 +103,9 @@ class mOTU:
             raise CoreNotComputedError("Self explanatory error")
         if boots > 0 or len(self.mock) >0 :
             from mOTUlizer.classes.MockData import MockmOTU
-            mean = lambda data: float(sum(data)/len(data))
-            variance 	= lambda data, avg: sum([x**2 for x in [i-avg for i in data]])/float(len(data))
-            std_dev = lambda data: variance(data, mean(data))**0.5
+            mean = lambda data: "NA" if "NA" in data else float(sum(data)/len(data))
+            variance 	= lambda data, avg: "NA" if "NA" in data else sum([x**2 for x in [i-avg for i in data]])/float(len(data))
+            std_dev = lambda data: "NA" if "NA" in data else variance(data, mean(data))**0.5
 
             while len(self.mock) < boots:
                 print("Running bootstrap {}/{}".format(len(self.mock)+1, boots), file = sys.stderr)
@@ -316,6 +316,8 @@ class mOTU:
         stats = self.get_stats()
         stats = list(stats.values())[0]
         stats.update(self.roc_values(boots = len(self.mock)))
+        if not stats['core']:
+            stats['core'] = []
         for g in self.gene_clusters:
             k = g.name
             out_dict[k] = {}

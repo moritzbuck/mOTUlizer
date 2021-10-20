@@ -74,14 +74,12 @@ def motulize(args):
     if len(fnas) > 0 :
         genomes = set(fnas.keys())
     else :
-        genomes = {a for k in dist_dict for a in k}
-
-    if dist_dict:
-        print("{nb_gen} genomes found with {counts} ANI mOTU edges".format(nb_gen = len(genomes), counts = len(dist_dict)), file=sys.stderr)
-    else :
-        print("{nb_gen} genomes found".format(nb_gen = len(genomes)), file=sys.stderr)
-
-    print("Parsing the completeness/redundancy-file", file = sys.stderr)
+        with open(similarities) as handle:
+            genomes = {ll for l in handle for ll in l.split("\t")[0:2]}
+            genomes = {".".join(os.path.basename(g).split(".")[:-1]) if any([g.endswith(ext) for ext in FASTA_EXTS]) else os.path.basename(g) for g in genomes}
+            genomes.remove("query")
+            genomes.remove("subject")
+            genomes.remove("reference")
 
     if original_file is None:
         print("No file provided, all genomes are assumed perfect (100% complete, 0% redundancy)", file=sys.stderr)
@@ -93,21 +91,24 @@ def motulize(args):
     if not all([g in original_info  for g in genomes]):
         raise ValueError("you do not have completness/redundancy info for all you bins, values missing for :" + ", ".join([g for g in genomes if g not in original_info][0:10]) + "... (only 10 first shown   )")
 
-    if fnas == {}:
-        fnas = {g : None for g in genomes}
+
+        if dist_dict:
+            print("{nb_gen} genomes found with {counts} ANI mOTU edges".format(nb_gen = len(genomes), counts = len(dist_dict)), file=sys.stderr)
+        else :
+            print("{nb_gen} genomes found".format(nb_gen = len(genomes)), file=sys.stderr)
+
+            print("Parsing the completeness/redundancy-file", file = sys.stderr)
 
     print("making bin-objects", file = sys.stderr)
 
-    all_bins = [MetaBin(name = g, nucleotide_file = fnas[g], genome_completeness = original_info[g]['Completeness'], genome_redundancy = original_info[g]['Contamination']) for g in genomes]
+    all_bins = [MetaBin(name = g, nucleotide_file = fnas.get(g, None), genome_completeness = original_info[g]['Completeness'], genome_redundancy = original_info[g]['Contamination']) for g in genomes]
 
     whole_set = mOTU(all_bins)
 
     if similarities:
         print("Loading similarities", file = sys.stderr)
         whole_set.load_anis(similarities)
-
-    if not dist_dict is None:
-    else:
+    else :
         print("Similarities not provided, will compute them with fastANI", file = sys.stderr)
         if keep_simi and not force:
             if os.path.exists(keep_simi):
@@ -138,15 +139,15 @@ def motulize(args):
         'mean_ANI' : v['mean_ANI']['mean_ANI'],
         'min_ANI' : min([vv['ani'] for vv in v['ANIs'].values()]),
         'missing_edges' : v['mean_ANI']['missing_edges'],
-        'nb_MAGs' : len([g.name for g in motuID2motu[k] if g.original_complet > mag_complete and g.original_redundancy < mag_redundancy]),
-        'nb_SUBs' : len([g.name for g in motuID2motu[k] if g.original_complet <= mag_complete or g.original_redundancy >= mag_redundancy]),
-        'MAGs' : ";".join([g.name for g in motuID2motu[k] if g.original_complet > mag_complete and g.original_redundancy < mag_redundancy]),
-        'SUBs' : ";".join([g.name for g in motuID2motu[k] if g.original_complet <= mag_complete or g.original_redundancy >= mag_redundancy])
+        'nb_MAGs' : len([g.name for g in motuID2motu[k] if g._original_complet > mag_complete and g.original_redundancy < mag_redundancy]),
+        'nb_SUBs' : len([g.name for g in motuID2motu[k] if g._original_complet <= mag_complete or g.original_redundancy >= mag_redundancy]),
+        'MAGs' : ";".join([g.name for g in motuID2motu[k] if g._original_complet > mag_complete and g.original_redundancy < mag_redundancy]),
+        'SUBs' : ";".join([g.name for g in motuID2motu[k] if g._original_complet <= mag_complete or g.original_redundancy >= mag_redundancy])
 
         }
         short_out += [row]
 
-    genome_line = "genomes=" + ";".join(["{}:completeness={}:redundancy={}".format(k.name, k.original_complet, k.original_redundancy) for motu in mOTUs for k in motu ])
+    genome_line = "genomes=" + ";".join(["{}:completeness={}:redundancy={}".format(k.name, k._original_complet, k.original_redundancy) for motu in mOTUs for k in motu ])
 
     outformat ="""#mOTUlizer:mOTUlize:{version}
 #prefix={name}
