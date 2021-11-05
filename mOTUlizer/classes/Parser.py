@@ -5,9 +5,9 @@ import sys
 class Parser(metaclass=abc.ABCMeta):
 
     def __init__(self, **kwargs):
-        if 'gene_id2genome' in kwargs and gene_id2genome:
-            if type(gene_id2genome) == dict:
-                self.gene_id2genome = gene_id2genome
+        if 'gene_id2genome' in kwargs and kwargs['gene_id2genome']:
+            if type(kwargs['gene_id2genome']) == dict:
+                self.gene_id2genome = kwargs['gene_id2genome']
             else :
                 print("TODO")
                 sys.exit(0)
@@ -193,11 +193,13 @@ class MmseqsParse(Parser):
 
         print("Stratify it to genome", file = sys.stderr)
         if not self.gene_id2genome:
-            self.gene_id2genome = {k : "_".join(k.split("_")[:-1]) for k in gene_id2family.keys()}
+            self.gene_id2genome = {k : ["_".join(k.split("_")[:-1])] for k in gene_id2family.keys()}
 
-        genome2family = {k : [] for k in set(self.gene_id2genome.values())}
-        for k,v in gene_id2family.items():
-            genome2family[self.gene_id2genome[k]] += [v]
+        genome2family = { kk : [] for k in self.gene_id2genome.values() for kk in k}
+
+        for k,v in tqdm(gene_id2family.items()):
+            for vv in self.gene_id2genome[k]:
+                genome2family[vv] += [v]
         if count:
             return {k : {vv : v.count(vv) for vv in set(v)} for k,v in genome2family.items()}
         else :

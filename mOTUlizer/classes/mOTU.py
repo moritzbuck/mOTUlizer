@@ -1,4 +1,4 @@
-    from mOTUlizer.classes.MetaBin import MetaBin
+from mOTUlizer.classes.MetaBin import MetaBin
 from mOTUlizer.classes.COGs import *
 import subprocess
 import tempfile

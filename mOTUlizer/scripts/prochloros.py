@@ -380,6 +380,14 @@ def running_tools():
 
     python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin static_data/ppanggolin_clusters_goods.h5 > static_data/ppanggolin_goods.gid2gene_clusters
 
+    ppanggolin annotate --anno nucleotides/s__Prochlorococcus_A_clusters.txt   -o static_data/ --basename ppanggolin_clusters_pAs --use_pseudo --tmpdir . -c 20 -f
+    ppanggolin cluster -p static_data/ppanggolin_clusters_goods.h5 -c 20 --tmpdir .
+    ppanggolin graph -p static_data/ppanggolin_clusters_goods.h5 -c 20
+    ppanggolin partition -K3 -f  -p static_data/ppanggolin_clusters_goods.h5 --cpu 20
+
+    python ../../mOTUlizer/bin/mOTUconvert.py --in_type ppanggolin static_data/ppanggolin_clusters_goods.h5 > static_data/ppanggolin_goods.gid2gene_clusters
+
+
     mkdir other_soft/roary/s__Prochlorococcus_A
     roary -p 22 -o other_soft/roary/s__Prochlorococcus_A_clusters.txt  -cd 1 -v `cat nucleotides/gff_list  | cut -f2`
     cp accessory* blast_identity_frequency.Rtab  core_accessory* gene_presence_absence.* number_of_* summary_statistics.txt other_soft/roary/s__Prochlorococcus_A
@@ -420,13 +428,14 @@ def run_motupan(genomes, gid2gene_clusters, name = "test" , k=15):
     gene_clusters_dict = {k : gid2gene_clusters.get(k,gid2gene_clusters[k.split("#")[0]])  for  k in kks}
     checkm_loc = {g : checkm.get(g,checkm[g.split("#")[0]])['Completeness']  for g in kks}
     motu = None
-    motu = mOTU( name =  name , faas = faas_loc, gene_clusters_dict = gene_clusters_dict, genome_completion_dict = checkm_loc, max_it = 20, threads = 20, precluster = True, method = "default")
+    motu = mOTU( name =  name , faas = faas_loc, gene_clusters_dict = gene_clusters_dict, genome_completion_dict = checkm_loc, max_it = 20, threads = 20, precluster = True, method = "default", quiet = True)
     stats = motu.get_stats()
-#    roc = motu.roc_values()
+    roc = motu.roc_values(1)
     eff_genomes = sum([v for v in checkm_loc.values()])/100
     new_eff = sum([g.new_completness for g in motu])/100
     out = { 'nb_genomes' : k, 'core_len' : len(stats['test']['core']), 'aux_len' : len(stats['test']['aux_genome']), "checkm_eff" : eff_genomes, "motu_eff" : new_eff, 'mean_new_complete' : mean([g.new_completness for g in motu]) }
-#    out.update(roc)
+    out.update(roc)
+    out['core'] = motu.core
     return out
 
 def get_data(g):
@@ -558,29 +567,56 @@ def roary_vs_motupan():
         with open("analyses/roary_rarefaction.csv", "w") as handle:
             handle.writelines([",".join(head) + "\n"] + [ ",".join([str(dd[k]) for k in head]) + '\n' for dd in boots])
 
-    with open("static_data/ppanggolin_goods.gid2gene_clusters") as handle:
+    with open("static_data/ppanggolin_species.gid2cog") as handle:
         ppanggolin_gi2gene_clusters = {k : set(v) for k, v in json.load(handle).items()}
-        boots = []
-        for i in tqdm(range(3, len(ppanggolin_gi2gene_clusters))):
-            for j in range(reps):
-                sub_gid2gene_clusters = {k : ppanggolin_gi2gene_clusters[k] for k in choices(list(ppanggolin_gi2gene_clusters), k=i)}
-                est_complete = mean([checkm[k]['Completeness'] for k in sub_gid2gene_clusters])
-                tt = pange_dict2roary_classes(sub_gid2gene_clusters)
-                tt['nb_org'] = i
-                tt['rep'] = j
-                tt['method'] = "strict"
-                tt['est_checkm_complete'] = est_complete
-                motupan = run_motupan(list(sub_gid2gene_clusters.keys()),k=i, gid2gene_clusters = sub_gid2gene_clusters)
+    boots = []
+    fulls = {k : ppanggolin_gi2gene_clusters[k] for k in ppanggolin_gi2gene_clusters if k in full_p_As}
+    bests = run_motupan(full_p_As, k = len(full_p_As), gid2gene_clusters = fulls)
+    best_cores = []
+    for i in tqdm(range(10)):
+        sub_gid2gene_clusters = {k : ppanggolin_gi2gene_clusters[k] for k in choices(list(ppanggolin_gi2gene_clusters), k=200)}
+        motupan = run_motupan(list(sub_gid2gene_clusters.keys()),k=300, gid2gene_clusters = sub_gid2gene_clusters)
+        best_cores += [motupan['core']]
 
-                tt['motupan_est_checkm'] = motupan['mean_new_complete']
-                tt['motupan_core'] = motupan['core_len']
-                tt['motupan_cloud'] = motupan['aux_len']
+    soft_core = set.union(*best_cores)
+    best_core = bests['core']
 
-                boots += [tt]
+    def prepar_motu(nb_mags, rep):
+        i = nb_mags
+        j = rep
+        sub_gid2gene_clusters = {k : ppanggolin_gi2gene_clusters[k] for k in choices(list(ppanggolin_gi2gene_clusters), k=i)}
+        est_complete = mean([checkm[k]['Completeness'] for k in sub_gid2gene_clusters])
+        tt = pange_dict2roary_classes(sub_gid2gene_clusters)
+        tt['nb_org'] = i
+        tt['rep'] = j
+        tt['method'] = "strict"
+        tt['est_checkm_complete'] = est_complete
+        motupan = run_motupan(list(sub_gid2gene_clusters.keys()),k=i, gid2gene_clusters = sub_gid2gene_clusters)
+        tt['motupan_est_checkm'] = motupan['mean_new_complete']
+        tt['motupan_core'] = motupan['core_len']
+        tt['motupan_cloud'] = motupan['aux_len']
+        tt['bootstrapped_fpr'] = motupan['mean_fpr']
+        tt['lowest_false'] = motupan['mean_lowest_false']
+        tt['recall'] = motupan['mean_recall']
+        tt['empirical_fpr'] = len(motupan['core'].difference(soft_core))/len(soft_core)
+        return tt
 
-        head = list(boots[0].keys())
-        with open("analyses/ppanggolin_rarefaction.csv", "w") as handle:
-            handle.writelines([",".join(head) + "\n"] + [ ",".join([str(dd[k]) for k in head]) + '\n' for dd in boots])
+    import multiprocessing as mp
+    pool = mp.Pool(mp.cpu_count())
+
+    results2 = []
+    for j in range(20):
+        results2 += pool.starmap_async(prepar_motu, [ (i, j) for i in range(3,len(ppanggolin_gi2gene_clusters))]).get()
+        pandas.DataFrame.from_records(results2).to_csv("analyses/motupan_rarefact_w_ppanggolin_cogs_3.tsv")
+        print(f"========== Done rep {j} ========")
+
+#    for j in tqdm(range(reps)):
+#        for i in tqdm(range(3, len(ppanggolin_gi2gene_clusters))):
+#            boots += [tt]
+
+#    head = list(boots[0].keys())
+#    with open("analyses/ppanggolin_rarefaction.csv", "w") as handle:
+#        handle.writelines([",".join(head) + "\n"] + [ ",".join([str(dd[k]) for k in head]) + '\n' for dd in boots])
 
 
 

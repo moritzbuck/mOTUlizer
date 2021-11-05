@@ -98,10 +98,10 @@ def compute_COGs(faas, name, precluster = False, threads = 4, method =  "mmseqsC
                 genome2gene_clusters[vv].update([v])
 
     elif method == "mmseqsCluster" :
-        "coverage = 80% with cov-mode = 0, minimal amino acid sequence identity = 80% and cluster-mode = 0"
+        "coverage = 80% with cov-mode = 0, minimal amino acid sequence identity = 0% and cluster-mode = 0"
         covmode = 0
         cov = 0.80
-        seqid = 0.80
+        seqid = 0.0
         if not shutil.which("mmseqs"):
             print("You need mmseqs2 to run the silix gene-clustering, either install it or run mOTUpan with an other gene-clustering or your own traits", file = sys.stderr)
             sys.exit(-1)

@@ -112,10 +112,23 @@ def motupan(args):
         out_handle = sys.stdout
     stats = motu.get_stats()
 
+
+    if args.checkm:
+        abs = lambda x : x if x > 0 else -x
+        mean = lambda l : sum(l)/len(l)
+        mean_complet_diff = mean([k.checkm_complet - k.new_completness for k in motu])
+        max_complete_diff = max([k.checkm_complet - k.new_completness for k in motu])
+        if mean_complet_diff > 5:
+            print(f"**WARNING** : the mean difference between you prior and posterior completeness estimates is pretty high ({mean_complet_diff:.2f} %), This doesn't have to be a problem, but it could be due to a highly unbalanced set of genomes (e.g. many of one strain and few of an other), some genomes in the input set that shouldn't be there, or maybe your gene-clusters are too 'strict'...", file = sys.stderr)
+        if max_complete_diff > 60:
+            print(f"**WARNING** : the largest difference between you prior and posterior completeness estimates is pretty high ({max_complete_diff:.2f} %), This doesn't have to be a problem, but it could be due to a highly unbalanced set of genomes (e.g. many of one strain and few of an other), some genomes in the input set that shouldn't be there, or maybe your gene-clusters are too 'strict'...", file = sys.stderr)
+
     nb_boots = args.boots
+
+    stats[name].update(motu.roc_values(boots=nb_boots))
+    print(motu.roc_values(boots=nb_boots))
     if args.long and not args.genome2gene_clusters_only:
 
-        stats[name].update(motu.roc_values(boots=nb_boots))
         json.dump(stats, out_handle, indent=4, sort_keys=True)
     elif args.genome2gene_clusters_only :
         json.dump({k : list(v) for k,v in motu.gene_clusters_dict.items()}, out_handle, indent=4, sort_keys=True)

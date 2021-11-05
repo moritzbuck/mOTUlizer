@@ -1,9 +1,11 @@
 library(data.table)
 library(pheatmap)
 library(RColorBrewer)
-library('philentropy')
+#library('philentropy')
 library(ggplot2)
 library(ggrepel)
+library(ggpubr)
+library(scales)
 
 dd = fread("analyses/motupan_species_rarefact_w_roary_cogs.tsv")
 dd[, tool := "mOTUpan"]
@@ -211,3 +213,19 @@ ggplot(meted[sample(nrow(meted))], aes(x=mean_completeness_ppan, y=value/mean_es
   xlab('mean completeness')+ylab('Fraction of core COGs')#+ylim(0,1100)
 
   ggsave("~/temp/motupan_vs_ppanggolin_core_fract.pdf", width = 7, height = 6)
+
+rar_new = fread("analyses/motupan_rarefact_w_ppanggolin_cogs_3.tsv")
+tt = rar_new$empirical_fpr > 0 & rar_new$bootstrapped_fpr > 0
+rar_new = rar_new[tt]
+mm = melt(rar_new[,c("nb_org", "empirical_fpr", "bootstrapped_fpr")], id.vars = "nb_org")
+
+g1 = ggplot(rar_new, aes(x=empirical_fpr, y=bootstrapped_fpr, col=nb_org))+geom_point()+
+  geom_density2d()+geom_smooth(method="lm", se = FALSE, col="purple", size=1.5)+
+  geom_abline(col="red", size=1.5)+theme_minimal()+scale_y_log10()+scale_x_log10()+scale_color_gradientn(colors = c("#91bfdb", "#ffffbf", "#fc8d59"), trans = "log10", name = "Genome count:")+
+  xlab("Empirical fpr")+ylab("Bootstrapped fpr")
+g2 = ggplot(mm, aes(x=nb_org, y=value, col=variable))+geom_point(alpha=0.3)+geom_smooth(se = FALSE, size=1.5)+scale_y_log10()+theme_minimal()+
+  scale_color_manual(values = c(muted("#1b9e77"), muted("#d95f02")),  labels = c("Empirical", "Bootstrapped"), name = "fpr type:")+
+  xlab("Genome count")+ylab("False positive rate")
+
+ggarrange(g1,g2,labels = c("[A]", "[B]"), ncol=2)
+ggsave("analyses/sup_fig.pdf", width = 12, height = 8)

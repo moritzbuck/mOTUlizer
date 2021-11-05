@@ -40,25 +40,34 @@ anvi'o :
 
 def motuconvert(args):
 
+    kwargs = dict()
+    if args.gene2genome:
+        print("Parsing the --gene2genome file", file = sys.stderr )
+        with open(args.gene2genome) as handle:
+            kwargs['gene_id2genome'] = {l.split("\t")[0] : l.split("\t")[1].strip().split(";") for l in handle}
+
     method = args.in_type
     if method == "emapper":
-        converter = EmapperParse()
+        converter = EmapperParse(**kwargs)
     elif method == "ppanggolin":
-        converter = PPanGGolinParse()
+        converter = PPanGGolinParse(**kwargs)
     elif method == "roary":
-        converter = RoaryParse()
+        converter = RoaryParse(**kwargs)
     elif method == "mmseqs2":
-        converter = MmseqsParse()
+        converter = MmseqsParse(**kwargs)
     elif method == "anvio":
-        converter = AnvioParse()
+        converter = AnvioParse(**kwargs)
     else :
         print("This is not implemented yet run with '--list' to see available options", file = sys.stderr )
         sys.exit(0)
 
+
+    print("Doing the convertion", file = sys.stderr )
+
     genome2gene_clusterss = converter.convert(infile = args.input, count = args.count)
 
     if args.output:
-        out_handle = open(out_json, "w")
+        out_handle = open(args.output, "w")
     else :
         out_handle = sys.stdout
 
