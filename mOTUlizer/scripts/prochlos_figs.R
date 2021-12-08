@@ -227,5 +227,5 @@ g2 = ggplot(mm, aes(x=nb_org, y=value, col=variable))+geom_point(alpha=0.3)+geom
   scale_color_manual(values = c(muted("#1b9e77"), muted("#d95f02")),  labels = c("Empirical", "Bootstrapped"), name = "fpr type:")+
   xlab("Genome count")+ylab("False positive rate")
 
-ggarrange(g1,g2,labels = c("[A]", "[B]"), ncol=2)
+ggarrange(g1,g2,labels = c("A", "B"), ncol=2)
 ggsave("analyses/sup_fig.pdf", width = 12, height = 8)

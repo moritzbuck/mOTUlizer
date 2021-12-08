@@ -9,17 +9,19 @@ import json
 from mOTUlizer import __version__
 
 from mOTUlizer.utils import *
-from mOTUlizer.classes.Parser import EmapperParse, PPanGGolinParse, RoaryParse, MmseqsParse, AnvioParse
+from mOTUlizer.classes.Parser import EmapperParse, PPanGGolinParse, RoaryParse, MmseqsParse, AnvioParse, OldEmapperParse
 
 description_text = """
 Converts output of diverse software generatig COGs, or genetically encoded traits into a genome2gene_clusters-JSON file useable by mOTUpan
 """
 
 list_text = """
-emapper :
+emapper/old_emapper :
 \tdescribes each genomes as a set of eggNOGs based on the output of eggNOGmapper,
 \tonly the deepest (e.g. closest to the root) eggNOG for each hit is taken,
-\tinput-file is just the  '.emapper.annotations'-file
+\tinput-file is just the  '.emapper.annotations'-file.
+\tThe old_emapper is for older versions of eggnoggmapper can be spoted by the
+\tfirst column being #query_name not #query
 
 ppanggolin :
 \textracts the gene families from the hdf5-file (e.g. '.h5' file in the output folder)
@@ -49,6 +51,8 @@ def motuconvert(args):
     method = args.in_type
     if method == "emapper":
         converter = EmapperParse(**kwargs)
+    elif method == "old_emapper":
+        converter = OldEmapperParse(**kwargs)
     elif method == "ppanggolin":
         converter = PPanGGolinParse(**kwargs)
     elif method == "roary":

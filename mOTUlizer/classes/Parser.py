@@ -18,7 +18,7 @@ class Parser(metaclass=abc.ABCMeta):
     def convert(self, infile, outfile = None, **kwargs):
         pass
 
-class EmapperParse(Parser):
+class OldEmapperParse(Parser):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         try :
@@ -62,6 +62,40 @@ class EmapperParse(Parser):
         tax2level = {k : len(v) for k,v in tax_db.get_lineage_translator(list(taxos)).items()}
         lowest_level = lambda x : tax2level.get(int(x[1]),1000)
         gene_id2deepest_egg = {k:  min([vv.split('@') for vv in v.split(",")], key = lowest_level)[0] for k,v in tqdm(gene_id2eggs.items())}
+
+        print("Stratify it to genome", file = sys.stderr)
+        if not self.gene_id2genome:
+            self.gene_id2genome = {k : "_".join(k.split("_")[:-1]) for k in gene_id2deepest_egg.keys()}
+
+        genome2nog = {k : [] for k in set(self.gene_id2genome.values())}
+        for k,v in gene_id2deepest_egg.items():
+            genome2nog[self.gene_id2genome[k]] += [v]
+        if count:
+            return {k : {vv : v.count(vv) for vv in set(v)} for k,v in genome2nog.items()}
+        else :
+            return {k : list(set(v)) for k,v in genome2nog.items()}
+
+class EmapperParse(Parser):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def convert(self, infile, count = False):
+
+        with open(infile) as handle:
+            header = None
+            counter = 0
+            while not header and counter < 15:
+                head = handle.readline().rstrip().split("\t")
+                if head[0] == "#query" :
+                    header = head
+                counter += 1
+            if not header :
+                print("\nYou sure this file is good? Like, is it the '.emapper.annotations' you got from running eggnoggmapper?\n")
+                sys.exit(0)
+
+            idx = [i for i,v in enumerate(header) if v == "eggNOG_OGs"][0]
+            print("Loading eggNOGs from file.", file = sys.stderr)
+            gene_id2deepest_egg = {l.split("\t")[0] : l.split("\t")[idx].split("@")[0] for l in tqdm(handle.readlines()) if not l.startswith("#")}
 
         print("Stratify it to genome", file = sys.stderr)
         if not self.gene_id2genome:
