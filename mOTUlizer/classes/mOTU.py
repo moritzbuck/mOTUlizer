@@ -70,9 +70,9 @@ class mOTU:
     def roc_values(self, boots):
         if boots > 0 or len(self.mock) >0 :
             from mOTUlizer.classes.MockData import MockmOTU
-            mean = lambda data: float(sum(data)/len(data))
-            variance 	= lambda data, avg: sum([x**2 for x in [i-avg for i in data]])/float(len(data))
-            std_dev = lambda data: variance(data, mean(data))**0.5
+            mean = lambda data: float(sum(data)/len(data)) if 'NA' not in data else "NA"
+            variance 	= lambda data, avg: sum([x**2 for x in [i-avg for i in data]])/float(len(data))  if 'NA' not in data else "NA"
+            std_dev = lambda data: variance(data, mean(data))**0.5  if 'NA' not in data else "NA"
 
             while len(self.mock) < boots:
                 print("Running bootstrap {}/{}".format(len(self.mock)+1, boots), file = sys.stderr)
@@ -204,9 +204,9 @@ class mOTU:
         dist_dict = self.fastani_matrix()
         dists = [dist_dict.get((a.name,b.name)) for a in self for b in self if a != b ]
         missing_edges = sum([d is None for d in dists])
-        found_edges = [d is None for d in dists]
+        found_edges = sum([d not is None for d in dists])
 
-        return {'mean_ANI' : sum([d for d in dists if d])/len(found_edges) if len(found_edges) > 0 else None, 'missing_edges' : missing_edges, 'total_edges' : len(found_edges) + missing_edges}
+        return {'mean_ANI' : sum([d for d in dists if d])/found_edges if len(found_edges) > 0 else None, 'missing_edges' : missing_edges, 'total_edges' : found_edges + missing_edges}
 
     def __core_likelyhood(self, max_it = 20, likeli_cutof = 0 ):
         likelies = {gene_clusters : self.__core_likely(gene_clusters) for gene_clusters in self.gene_clustersCounts}

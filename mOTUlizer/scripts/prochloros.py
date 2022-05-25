@@ -42,7 +42,7 @@ counts_sfdb = {k : len(v) for k,v in stratfreshmotu2bin.items()}
 
 sfdb_ids = {k : v for k,v in stratfreshmotu2bin.items() if len(v) > 20}
 
-r95 = pandas.read_csv("/home/moritz/data/gtdb/bac120_metadata_r95.tsv", sep ="\t", index_col=0)
+r95 = pandas.read_csv("/home/moritz/dbs/gtdb/bac120_metadata_r95.tsv", sep ="\t", index_col=0)
 r95['est_size'] = 100*r95.genome_size/r95.checkm_completeness/1000000
 
 gtdb2rep = {v[1]['gtdb_taxonomy'] : v[1]['gtdb_genome_representative'] for v in  r95[['gtdb_genome_representative', 'gtdb_taxonomy']].iterrows() }
@@ -413,7 +413,7 @@ def get_genome_stats(g):
     return {'genome_len' : length, 'nb_contigs' : nb_contig}
 genome2stats = {g: get_genome_stats(g) for g in tqdm(genome2motu)}
 
-def run_motupan(genomes, gid2gene_clusters, name = "test" , k=15):
+def run_motupan(genomes, gid2gene_clusters, name = "test" , k=15, bs=1):
     if k and k < len(genomes):
         kks = choices(genomes, k = k)
     else :
@@ -430,7 +430,7 @@ def run_motupan(genomes, gid2gene_clusters, name = "test" , k=15):
     motu = None
     motu = mOTU( name =  name , faas = faas_loc, gene_clusters_dict = gene_clusters_dict, genome_completion_dict = checkm_loc, max_it = 20, threads = 20, precluster = True, method = "default", quiet = True)
     stats = motu.get_stats()
-    roc = motu.roc_values(1)
+    roc = motu.roc_values(bs)
     eff_genomes = sum([v for v in checkm_loc.values()])/100
     new_eff = sum([g.new_completness for g in motu])/100
     out = { 'nb_genomes' : k, 'core_len' : len(stats['test']['core']), 'aux_len' : len(stats['test']['aux_genome']), "checkm_eff" : eff_genomes, "motu_eff" : new_eff, 'mean_new_complete' : mean([g.new_completness for g in motu]) }
@@ -599,13 +599,15 @@ def roary_vs_motupan():
         tt['lowest_false'] = motupan['mean_lowest_false']
         tt['recall'] = motupan['mean_recall']
         tt['empirical_fpr'] = len(motupan['core'].difference(soft_core))/len(soft_core)
+        tt['empirical_tpr'] = len(motupan['core'].intersection(soft_core))/len(soft_core)
+
         return tt
 
     import multiprocessing as mp
     pool = mp.Pool(mp.cpu_count())
 
-    results2 = []
-    for j in range(20):
+#    results2 = []
+    for j in range(19):
         results2 += pool.starmap_async(prepar_motu, [ (i, j) for i in range(3,len(ppanggolin_gi2gene_clusters))]).get()
         pandas.DataFrame.from_records(results2).to_csv("analyses/motupan_rarefact_w_ppanggolin_cogs_3.tsv")
         print(f"========== Done rep {j} ========")
@@ -661,3 +663,70 @@ def processing_goods():
     pandas.DataFrame.from_dict({g.name : {'motupan_completeness' : g.new_completness, 'checkm_completeness' : g.checkm_complet, **genome2stats[g.name]} for g in motupan_ppanggolin}, orient="index").to_csv("analyses/ppanggolin_matrix_genomes.csv", index_label = "genome")
 
     roary_matrix = {gg : dict({k : 0 for k in roary}) for g in roary.values() for gg in g}
+
+def completeness_rare():
+    with open("static_data/ppanggolin_species.gid2cog") as handle:
+        ppanggolin_gi2gene_clusters = {k : set(v) for k, v in json.load(handle).items()}
+    best_cores = []
+    for i in tqdm(range(10)):
+        sub_gid2gene_clusters = {k : ppanggolin_gi2gene_clusters[k] for k in choices(list(ppanggolin_gi2gene_clusters), k=200)}
+        motupan = run_motupan(list(sub_gid2gene_clusters.keys()),k=300, gid2gene_clusters = sub_gid2gene_clusters)
+        best_cores += [motupan['core']]
+
+    soft_core = set.union(*best_cores)
+    bads = [ g for g in p_As if checkm[g]['Completeness'] < 45]
+    test = []
+    for i in tqdm(range(10,len(bads))):
+        motupan = run_motupan(list(bads), k=i, gid2gene_clusters = {g: ppanggolin_gi2gene_clusters[g] for g in bads})
+        test += [ {k : i, 'true_positive' : len(motupan['core'].intersection(soft_core)), 'false_positive' : len(motupan['core'])-len(motupan['core'].intersection(soft_core)) } ]
+
+    test2 = []
+    for ii in tqdm(range(300)):
+        bads = sample(p_As, 30)
+        motupan_simple = run_motupan(list(bads), gid2gene_clusters = {g: ppanggolin_gi2gene_clusters[g] for g in bads}, bs=1)
+        test2 += [ {'rep' : ii,
+            'true_positive' : len(motupan_simple['core'].intersection(soft_core)),
+            'false_positive' : len(motupan_simple['core'])-len(motupan_simple['core'].intersection(soft_core)),
+            'mean_completeness' : mean([checkm[g]['Completeness'] for g in bads]),
+            'sd_completeness' : std([checkm[g]['Completeness'] for g in bads]),
+            'max_completeness' : max([checkm[g]['Completeness'] for g in bads]),
+            'recall' : motupan_simple['mean_recall'],
+            'fpr' : motupan_simple['mean_fpr'],
+            'empirical_fpr' : len(motupan_simple['core'].difference(soft_core))
+
+            } ]
+
+    test2 = []
+    for i in range(50):
+        for ii in tqdm(range(50, 95, 5)):
+            for iii in range(20):
+                bads = sample([g for g in p_As if checkm[g]['Completeness'] < ii and checkm[g]['Completeness'] > ii-5], 1) + sample([g for g in p_As if  checkm[g]['Completeness'] < 50], i-1)
+                motupan_simple = run_motupan(list(bads), gid2gene_clusters = {g: ppanggolin_gi2gene_clusters[g] for g in bads}, bs=1)
+                test2 += [ {'subset' : i,
+                    'completeness' : ii,
+                    'rep' : iii,
+                    'true_positive' : len(motupan_simple['core'].intersection(soft_core)),
+                    'false_positive' : len(motupan_simple['core'])-len(motupan_simple['core'].intersection(soft_core)),
+                    'mean_completeness' : mean([checkm[g]['Completeness'] for g in bads]),
+                    'sd_completeness' : std([checkm[g]['Completeness'] for g in bads]),
+                    'max_completeness' : max([checkm[g]['Completeness'] for g in bads]),
+                    'recall' : motupan_simple['mean_recall'],
+                    'fpr' : motupan_simple['mean_fpr']
+                    } ]
+
+    test2 = []
+    for i in [(0,50), (50,70), (70,101)]:
+            for iii in tqdm(range(30)):
+                bads = sample([g for g in p_As if checkm[g]['Completeness'] < i[1] and checkm[g]['Completeness'] > i[0]], 100)
+                motupan_simple = run_motupan(list(bads), gid2gene_clusters = {g: ppanggolin_gi2gene_clusters[g] for g in bads}, bs=1)
+                test2 += [ {'subset' : 100,
+                    'completeness' : i,
+                    'rep' : iii,
+                    'true_positive' : len(motupan_simple['core'].intersection(soft_core)),
+                    'false_positive' : len(motupan_simple['core'])-len(motupan_simple['core'].intersection(soft_core)),
+                    'mean_completeness' : mean([checkm[g]['Completeness'] for g in bads]),
+                    'sd_completeness' : std([checkm[g]['Completeness'] for g in bads]),
+                    'max_completeness' : max([checkm[g]['Completeness'] for g in bads]),
+                    'recall' : motupan_simple['mean_recall'],
+                    'fpr' : motupan_simple['mean_fpr']
+                    } ]
