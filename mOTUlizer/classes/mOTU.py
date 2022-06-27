@@ -204,7 +204,7 @@ class mOTU:
         dist_dict = self.fastani_matrix()
         dists = [dist_dict.get((a.name,b.name)) for a in self for b in self if a != b ]
         missing_edges = sum([d is None for d in dists])
-        found_edges = sum([d not is None for d in dists])
+        found_edges = sum([not d is None for d in dists])
 
         return {'mean_ANI' : sum([d for d in dists if d])/found_edges if len(found_edges) > 0 else None, 'missing_edges' : missing_edges, 'total_edges' : found_edges + missing_edges}
 
