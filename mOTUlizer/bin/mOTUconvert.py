@@ -9,17 +9,19 @@ import json
 from mOTUlizer import __version__
 
 from mOTUlizer.utils import *
-from mOTUlizer.classes.Parser import EmapperParse, PPanGGolinParse, RoaryParse, MmseqsParse, AnvioParse
+from mOTUlizer.classes.Parser import EmapperParse, PPanGGolinParse, RoaryParse, MmseqsParse, AnvioParse, OldEmapperParse
 
 description_text = """
 Converts output of diverse software generatig COGs, or genetically encoded traits into a genome2gene_clusters-JSON file useable by mOTUpan
 """
 
 list_text = """
-emapper :
+emapper/old_emapper :
 \tdescribes each genomes as a set of eggNOGs based on the output of eggNOGmapper,
 \tonly the deepest (e.g. closest to the root) eggNOG for each hit is taken,
-\tinput-file is just the  '.emapper.annotations'-file
+\tinput-file is just the  '.emapper.annotations'-file.
+\tThe old_emapper is for older versions of eggnoggmapper can be spoted by the
+\tfirst column being #query_name not #query
 
 ppanggolin :
 \textracts the gene families from the hdf5-file (e.g. '.h5' file in the output folder)
@@ -40,25 +42,36 @@ anvi'o :
 
 def motuconvert(args):
 
+    kwargs = dict()
+    if args.gene2genome:
+        print("Parsing the --gene2genome file", file = sys.stderr )
+        with open(args.gene2genome) as handle:
+            kwargs['gene_id2genome'] = {l.split("\t")[0] : l.split("\t")[1].strip().split(";") for l in handle}
+
     method = args.in_type
     if method == "emapper":
-        converter = EmapperParse()
+        converter = EmapperParse(**kwargs)
+    elif method == "old_emapper":
+        converter = OldEmapperParse(**kwargs)
     elif method == "ppanggolin":
-        converter = PPanGGolinParse()
+        converter = PPanGGolinParse(**kwargs)
     elif method == "roary":
-        converter = RoaryParse()
+        converter = RoaryParse(**kwargs)
     elif method == "mmseqs2":
-        converter = MmseqsParse()
+        converter = MmseqsParse(**kwargs)
     elif method == "anvio":
-        converter = AnvioParse()
+        converter = AnvioParse(**kwargs)
     else :
         print("This is not implemented yet run with '--list' to see available options", file = sys.stderr )
         sys.exit(0)
 
+
+    print("Doing the convertion", file = sys.stderr )
+
     genome2gene_clusterss = converter.convert(infile = args.input, count = args.count)
 
     if args.output:
-        out_handle = open(out_json, "w")
+        out_handle = open(args.output, "w")
     else :
         out_handle = sys.stdout
 

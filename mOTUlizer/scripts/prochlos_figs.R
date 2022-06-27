@@ -1,9 +1,11 @@
 library(data.table)
 library(pheatmap)
 library(RColorBrewer)
-library('philentropy')
+#library('philentropy')
 library(ggplot2)
 library(ggrepel)
+library(ggpubr)
+library(scales)
 
 dd = fread("analyses/motupan_species_rarefact_w_roary_cogs.tsv")
 dd[, tool := "mOTUpan"]
@@ -211,3 +213,60 @@ ggplot(meted[sample(nrow(meted))], aes(x=mean_completeness_ppan, y=value/mean_es
   xlab('mean completeness')+ylab('Fraction of core COGs')#+ylim(0,1100)
 
   ggsave("~/temp/motupan_vs_ppanggolin_core_fract.pdf", width = 7, height = 6)
+
+rar_new = fread("/home/moritz/kadath/projects/0039_mOTUlizer/test_data/prochlos/analyses/motupan_rarefact_w_ppanggolin_cogs_3.tsv")
+tt = rar_new$empirical_fpr > 0 & rar_new$bootstrapped_fpr > 0
+rar_new = rar_new[tt]
+mm = melt(rar_new[,c("nb_org", "empirical_fpr", "bootstrapped_fpr")], id.vars = "nb_org")
+
+g1 = ggplot(rar_new, aes(x=empirical_fpr, y=bootstrapped_fpr, col=nb_org))+geom_point()+
+  geom_density2d()+geom_smooth(method="lm", se = FALSE, col="purple", size=1.5)+
+  geom_abline(col="red", size=1.5)+theme_minimal()+scale_y_log10()+scale_x_log10()+scale_color_gradientn(colors = c("#91bfdb", "#ffffbf", "#fc8d59"), trans = "log10", name = "Genome count:")+
+  xlab("Empirical fpr")+ylab("Bootstrapped fpr")
+g2 = ggplot(mm, aes(x=nb_org, y=value, col=variable))+geom_point(alpha=0.3)+geom_smooth(se = FALSE, size=1.5)+scale_y_log10()+theme_minimal()+
+  scale_color_manual(values = c(muted("#1b9e77"), muted("#d95f02")),  labels = c("Empirical", "Bootstrapped"), name = "fpr type:")+
+  xlab("Genome count")+ylab("False positive rate")
+g3 = ggplot(rar_new, aes(x=1-empirical_tpr, y=bootstrapped_fpr, col=nb_org))+geom_point()+
+  geom_density2d()+geom_smooth(method="lm", se = FALSE, col="purple", size=1.5)+
+  theme_minimal()+scale_color_gradientn(colors = c("#91bfdb", "#ffffbf", "#fc8d59"), trans = "log10", name = "Genome count:")+
+  xlab("1 - Empirical tpr")+ylab("Bootstrapped fpr")+scale_y_log10()+scale_x_log10()+ theme(legend.position = "none")
+
+
+ggarrange(g1,g3,g2,labels = c("A", "B","C"), ncol=3)
+ggsave("/home/moritz/kadath/projects/0039_mOTUlizer/test_data/prochlos/analyses/sup_fig.pdf", width = 12, height = 5)
+softcore = 1688
+dd = fread("wtf.csv.old")
+dd = fread("wtf.csv")
+
+g1 = ggplot(dd, aes(y=true_positive/softcore, x=max_completeness))+
+  geom_point()+geom_smooth(method = "lm", se = FALSE, col="purple", size=1.5)+
+  theme_minimal()+
+  xlab("maximum completeness")+ylab("empirical true positive rate")
+
+g2 = ggplot(dd, aes(y=true_positive/softcore, x=subset, col=max_completeness))+
+  geom_point()+geom_smooth( col="purple", se = FALSE, size=1.5)+
+  theme_minimal()+theme(legend.position = "none")+
+  xlab("additional low quality genomes")+ylab("empirical true positive rate")
+
+g3 = ggplot(dd, aes(y=false_positive/softcore, x=subset, col=max_completeness))+
+  geom_point()+geom_smooth(se = FALSE, col="purple", size=1.5)+
+  theme_minimal()+labs(colour="max. complet.:")+
+  xlab("additional low quality genomes")+ylab("empirical false positive rate")
+
+g4 = ggplot(dd, aes(y=true_positive/softcore, x=fpr, col=max_completeness))+
+  geom_point()+geom_smooth(method = "lm", se = FALSE, col="purple", size=1.5)+
+  theme_minimal()+ theme(legend.position = "none")+
+  ylab("empirical true positive rate")+xlab("Bootstrapped false positive rate")
+
+g5 = ggarrange(g1,g2,g3, g4,labels = "AUTO", ncol=2, nrow=2)
+
+ggsave("/home/moritz/kadath/projects/0039_mOTUlizer/test_data/prochlos/analyses/sup_fig_2.pdf", g5, width = 12, height = 8)
+
+dd3 = fread("wtf3.csv")
+dd3[, tpr := true_positive/1688]
+dd3[completeness == "70-101", "completeness"]  = "70-100"
+g6 = ggviolin(dd3, x="completeness", y="tpr",add="boxplot", ylab = "empirical true positive rate", xlab = "completeness") +geom_jitter(alpha=0.5, width=0.1)+theme_minimal()
+ggsave("/home/moritz/projects/0039_mOTUlizer/test_data/prochlos/analyses/sup_fig_3.pdf", g6, width = 6, height = 8)
+
+#number_genomes,completeness_bin,rep,empirical_tpr,empirical_fpr,mean_completeness,sd_completeness,max_completeness,fpr
+#number of genomes one of which is good, good bin is randomly picked in a range of completeness 5 below this number,replicate number,

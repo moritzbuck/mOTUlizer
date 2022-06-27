@@ -10,6 +10,7 @@ from random import uniform
 from mOTUlizer import __version__
 from mOTUlizer.classes import *
 from mOTUlizer.utils import *
+from mOTUlizer.errors import *
 from mOTUlizer.classes.mOTU import mOTU
 import multiprocessing
 from mOTUlizer.classes.MetaBin import MetaBin
@@ -79,7 +80,6 @@ def motupan(args):
 
     all_bins = [MetaBin(name = g, amino_acid_file = None if faas is None else faas[g], genome_completeness = checkm[g]) for g in genomes]
 
-
     motu = mOTU( genomes = all_bins, name = name, threads = threads, precluster = precluster, make_gene_clustering = False if args.load_gene_clusters else True)
 
     if args.load_gene_clusters:
@@ -97,11 +97,20 @@ def motupan(args):
     if args.save_gene_clusters:
         motu.export_gene_clusters(args.save_gene_clusters)
 
-    motu.roc_values(boots=nb_boots)
-    nb_boots = args.boots
-    if args.long:
+    if args.checkm:
+        abs = lambda x : x if x > 0 else -x
+        mean = lambda l : sum(l)/len(l)
+        mean_complet_diff = mean([k.checkm_complet - k.new_completness for k in motu])
+        max_complete_diff = max([k.checkm_complet - k.new_completness for k in motu])
+        if mean_complet_diff > 5:
+            print(f"**WARNING** : the mean difference between you prior and posterior completeness estimates is pretty high ({mean_complet_diff:.2f} %), This doesn't have to be a problem, but it could be due to a highly unbalanced set of genomes (e.g. many of one strain and few of an other), some genomes in the input set that shouldn't be there, or maybe your gene-clusters are too 'strict'...", file = sys.stderr)
+        if max_complete_diff > 60:
+            print(f"**WARNING** : the largest difference between you prior and posterior completeness estimates is pretty high ({max_complete_diff:.2f} %), This doesn't have to be a problem, but it could be due to a highly unbalanced set of genomes (e.g. many of one strain and few of an other), some genomes in the input set that shouldn't be there, or maybe your gene-clusters are too 'strict'...", file = sys.stderr)
 
-        stats[name].update(motu.roc_values(boots=nb_boots))
+    nb_boots = args.boots
+    motu.roc_values(boots=nb_boots)
+
+    if args.long and not args.genome2gene_clusters_only:
         json.dump(stats, out_handle, indent=4, sort_keys=True)
     else :
         print(motu.pretty_pan_table(), file = out_handle)

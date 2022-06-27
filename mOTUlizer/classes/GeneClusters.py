@@ -221,7 +221,7 @@ class GeneClusters():
 
             print("running mmseqs easy-cluster with params --min-seq-id {seqid} --cov-mode {covmode} -c {cov} in {}".format(temp_folder, covmode = covmode, cov = cov, seqid=seqid), file = sys.stderr)
             mmseqs_dat = pjoin(temp_folder, "mmseqs_")
-            os.system("mmseqs easy-cluster --threads {threads}  --min-seq-id {seqid} --cov-mode {covmode} -c {cov} {faas} {out} {tmp} 2> /dev/null > /dev/null".format(covmode = covmode, cov = cov, seqid=seqid, faas = all_faas_file, out = mmseqs_dat, tmp = temp_folder, threads = threads))
+            os.system("mmseqs easy-cluster --threads {threads}  --min-seq-id {seqid} --cov-mode {covmode} -c {cov} {faas} {out} {tmp}  2> /dev/null > /dev/null".format(covmode = covmode, cov = cov, seqid=seqid, faas = all_faas_file, out = mmseqs_dat, tmp = temp_folder, threads = threads))
 
             with open(mmseqs_dat + "_cluster.tsv") as handle:
                 if precluster:

@@ -71,7 +71,7 @@ class MetaBin:
                 self.amino_acids = { feat.get_id() : feat.get_amino_acids() for feat in self.get_gff() if feat.feature == "CDS"}
             else :
                 self.amino_acids = {s.id : s.seq for s in SeqIO.parse(self.amino_acid_file, "fasta")}
-            self.amino_acids = {k : v for k, v in self.amino_acids.items() if "*" not in v.rstrip("*") and v.endswith("*")}
+            self.amino_acids = {k : v for k, v in self.amino_acids.items() if "*" not in v or v.endswith("*")}
         return self.amino_acids
 
     def get_gff(self):
