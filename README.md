@@ -1,5 +1,9 @@
 # mOTUlizer
 
+
+
+**DISCLAIMER, there is an other tool out there called mOTUs that creates OTU-tables directly from reads, if you are looking for that tool, this is the wrong page, you want to go ['here'](https://motu-tool.org/), but while you on my page, why don't you check out mOTUlizer, it's cool, I swear**
+
 Utility to analyse a group of closely related MAGs/Genomes/bins/SUBs of more or less dubious origin. Right now it is composed of a number of programs:
 
 * `mOTUlize.py` takes a set of genomes (I will use the term genome as a short hand for set of nucleotide sequences that presumably come from the same organism/population, can be incomplete, redundant or contaminated) and cluster them in to metagenomic Operational Taxonomic Units (mOTUs). Using similarity scores (by default ANI as computed by fastANI, but user can provide other similarities) a network is built based on (user defined) better quality genomes (for historical reasons called MAGs) by thresholding the similarities at a specific value (95% by default). The connected components of this graph are the mOTUs. Additionally lower quality genomes (SUBs, ) are recruited to the mOTU of whichever MAG they are most similar too if the similarity is above the threshold.
