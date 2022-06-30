@@ -37,6 +37,9 @@ class MetaBin:
     def get_completeness(self):
         return self._original_complet
 
+    def get_redundancy(self):
+        return self.original_redundancy
+
     def get_clust_set(self):
         return self.gene_clusters.get_clust_set()
 
@@ -72,6 +75,8 @@ class MetaBin:
             else :
                 self.amino_acids = {s.id : s.seq for s in SeqIO.parse(self.amino_acid_file, "fasta")}
             self.amino_acids = {k : v for k, v in self.amino_acids.items() if "*" not in v or v.endswith("*")}
+            self.amino_acids = {k : s if s.endswith("*") else (s + "*") for k,s in self.amino_acids.items()}
+
         return self.amino_acids
 
     def get_gff(self):

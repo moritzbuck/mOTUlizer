@@ -188,6 +188,7 @@ class mOTU:
         return out
 
     def get_representative(self, method = "complex", max_redund = 5, min_complete = 95):
+        if method == "complex":
             tt = [v.get_data() for v in self]
             data = { t['name'] : t for t in tt}
             if all([v['original_redundancy'] > max_redund for v in data.values()]):
@@ -199,6 +200,14 @@ class mOTU:
                 return max( [ (k , v['_original_complet']) for k,v in data.items() if v['original_redundancy'] == best_redund], key = lambda x: x[1])[0]
             else:
                 return max( [ (k , v['_original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
+        if method == "good_centroid":
+            goods = [g for g in self if g.get_completeness() > min_complete and g.get_redundancy() < max_redund]
+            anis = {g : [] for g in goods}
+            for k,v in self.get_anis().items():
+                for gg, nn in [k, tuple(reversed(k))]:
+                    if gg in anis:
+                        anis[gg] +=  [v['ani']*nn.get_completeness()/100]
+            return max(anis.items(), key = lambda p: sum(p[1]))[0]
 
     # def get_representative(tt, max_redund = 5, min_complete = 95):
     #         data = { t['name'] : t for t in tt}
@@ -463,7 +472,7 @@ class mOTU:
                 os.remove(b1_tfile)
                 with open(fastani_file) as handle:
                     handle.readline()
-                    out_dists = {(os.path.basename(l.split()[0]), os.path.basename(l.strip().split()[1])) : {'ani' : float(l.split()[2]), 'query_chunks' : float(l.split()[3]), 'reference_chunks' : float(l.split()[2]) } for l in handle}
+                    out_dists = {(os.path.basename(l.split()[0]), os.path.basename(l.strip().split()[1])) : {'ani' : float(l.split()[2]), 'query_chunks' : float(l.split()[3]), 'reference_chunks' : float(l.split()[4]) } for l in handle}
                     out_dists = {( ".".join(k[0].split(".")[:-1]) if any([k[0].endswith(ext) for ext in FASTA_EXTS]) else k[0],
                                    ".".join(k[1].split(".")[:-1]) if any([k[1].endswith(ext) for ext in FASTA_EXTS]) else k[1] ): v
                                    for k,v in out_dists.items() }

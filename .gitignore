@@ -113,3 +113,9 @@ scratch/
 #Rseshs
 
 .R*
+
+*.ORF
+*.jpg
+*.JPG
+*.pp3
+*.png

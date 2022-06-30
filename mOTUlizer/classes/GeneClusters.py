@@ -340,7 +340,7 @@ class GeneCluster():
         else :
             raise CantMethodError(f"The alignment method ({method}) you asked for is not implemented yet.")
 
-        if out_file and not os.path.exists(out_file):
+        if out_file is None or (out_file and not os.path.exists(out_file)):
             tool.run_command()
         elif not self.quiet:
             print("Alignment loaded from file", file = sys.stderr)

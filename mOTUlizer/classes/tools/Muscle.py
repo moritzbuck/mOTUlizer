@@ -6,9 +6,14 @@ from Bio.SeqRecord import SeqRecord
 class Muscle(Wrapper):
 
     __executables__ = ['muscle']
+    __version__ = 5.1
 
     def get_command(self):
-        return f"muscle -in {self.in_file} -out {self.out_file}" + (" > /dev/null 2> /dev/null" if self.quiet else "")
+        if self.__version__ < 5:
+            return f"muscle -in {self.in_file} -out {self.out_file}" + (" > /dev/null 2> /dev/null" if self.quiet else "")
+        else :
+            return f"muscle -align {self.in_file} -output {self.out_file}" + (" > /dev/null 2> /dev/null" if self.quiet else "")
+
 
     def __init__(self, seqsdict_or_infile, out_file = None , quiet = True):
         super().__init__()

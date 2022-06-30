@@ -127,7 +127,7 @@ def motulize(args):
     out_dict = {}
     for i,m in enumerate(mOTUs):
         stats = m.get_stats()
-        stats[m.name]['representative'] = m.get_representative()
+        stats[m.name]['representative'] = m.get_representative(method = "good_centroid", min_complete = mag_complete, max_redund = mag_redundancy).name
         out_dict.update(stats)
 
     short_out = []
