@@ -427,6 +427,7 @@ class mOTU:
         head = ["query" , "reference" , "ani" , "query_chunks" , "reference_chunks"]
         with open(file_path,"w") as handle:
             handle.writelines(["\t".join(head) + "\n"] + [f"{k[0].name}\t{k[1].name}\t{v['ani']}\t{v['query_chunks']}\t{v['reference_chunks']}\n" for k,v in self.get_anis().items() ] )
+
     def get_anis(self, method = "fastANI", block_size = 500, threads=20):
         if not hasattr(self, 'anis'):
             if method == "fastANI":
@@ -435,7 +436,7 @@ class mOTU:
                     sys.exit(-1)
                 fastani_file = tempfile.NamedTemporaryFile().name
 
-                mags = [b.nucleotide_file for b in self]
+                mags = [b.get_nucleotide_file() for b in self]
                 if any([m is None for m in mags]):
                     raise CantNucleotideError("All the genomes you want to have ANI for have to have a a nucleotide fasta file")
 

@@ -3,6 +3,7 @@ import tempfile
 import sys
 import os
 import shutil
+import gzip
 from mOTUlizer.config import FASTA_EXTS, MAX_COMPLETE
 from mOTUlizer.errors import *
 from Bio import SeqIO
@@ -13,7 +14,7 @@ class MetaBin:
     def __repr__(self) :
         return "< bin {name} with {n} gene_clusters >".format(n = len(self.gene_clusters) if self.gene_clusters else "NA", name = self.name)
 
-    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, genome_completeness = None, genome_redundancy = 0):
+    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, genome_completeness = None, genome_redundancy = 0, gbk_file = None):
         self.can_haz_gene_clusters = True
         self.name = name
         self.gene_clusters = None
@@ -21,6 +22,9 @@ class MetaBin:
         self.amino_acid_file = amino_acid_file
         self.amino_acids = None
         self.nucleotide_file = nucleotide_file
+        self.gbk_file =  gbk_file
+        if self.gbk_file :
+            _ = self.get_nucleotide_file()
         self._contigs = None
         self.gff_file = gff_file
         self.gff = None
@@ -30,6 +34,11 @@ class MetaBin:
             self._original_complet =  MAX_COMPLETE
         self.new_completness = None
         self.gene_clusters = None
+
+    def __del__(self):
+        if self.gbk_file and self.nucleotide_file:
+            os.remove(self.nucleotide_file)
+
 
     def set_completeness(self, value):
         self._original_complet = value if value < MAX_COMPLETE else MAX_COMPLETE
@@ -63,12 +72,29 @@ class MetaBin:
             self._genes = { feat.get_id() : feat.get_gene() for feat in self.get_gff() if feat.feature == "CDS"}
         return self._genes
 
+    def get_nucleotide_file(self):
+        if self.nucleotide_file:
+            return nucleotide_file
+        if self.gbk_file :
+            temp_fna = tempfile.NamedTemporaryFile().name
+            if self.gbk_file.endswith(".gz"):
+                handle = gzip.open(self.gbk_file, 'rt', encoding='utf-8')
+            else :
+                handle = open(self.gbk_file, 'r')
+            seqs = SeqIO.parse(handle, "genbank")
+            with open(temp_fna, "w") as handle2:
+                SeqIO.write(seqs,handle2,"fasta")
+            handle.close()
+            self.nucleotide_file = temp_fna
+            return  temp_fna
+        raise CantNucleotideError("You need an nucleotide fasta if you want to use a gff")
+
 
     def get_amino_acids(self):
         if not self.amino_acids:
             if not self.amino_acid_file:
                 if not self.gff_file:
-                    raise CantAminoAcidsError("You need either a gff or a amino-acid fasta if you want to use amino-acids")
+                    raise CantAminoAcidsError("You need either a gbk, gff or a amino-acid fasta if you want to use amino-acids")
                 if not self.nucleotide_file:
                     raise CantAminoAcidsError("You need an nucleotide fasta if you want to use a gff to get amino-acids")
                 self.amino_acids = { feat.get_id() : feat.get_amino_acids() for feat in self.get_gff() if feat.feature == "CDS"}
