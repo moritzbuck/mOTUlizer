@@ -9,45 +9,113 @@ from mOTUlizer.errors import *
 from Bio import SeqIO
 from mOTUlizer.classes.GeneClusters import GeneClusters
 from mOTUlizer.classes.GFF import GFF
+from mOTUlizer.db.SeqDb import SeqDb
+from mOTUlizer import _quiet_
+from mOTUlizer.utils import *
+
 
 class MetaBin:
     def __repr__(self) :
-        return "< bin {name} with {n} gene_clusters >".format(n = len(self.gene_clusters) if self.gene_clusters else "NA", name = self.name)
+        return "< bin {name} with {n} gene_clusters, and temp_folder {temp} >".format(n = len(self.gene_clusters) if self.gene_clusters else "NA", name = self.name, temp = self.temp_folder)
 
-    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, genome_completeness = None, genome_redundancy = 0, gbk_file = None):
-        self.can_haz_gene_clusters = True
+    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, genome_completeness = None, genome_redundancy = 0, gbk_file = None, cds_file = None, temp_dir = "/tmp/", taxonomy = None):
+        if not SeqDb.seq_db:
+            raise DataBaseNotInitialisedError("The database has not been initialised")
+        self.db = SeqDb.get_global_db()
         self.name = name
+        features = []
+        contigs = []
+        source = ""
+        feat_source = ""
+
+        if not self.db.has_genome(self.name):
+            if not _quiet_ :
+                print(f"Genome {self.name} added to Db")
+            if nucleotide_file :
+                if not os.path.exists(nucleotide_file):
+                    raise CantNucleotideError(f"nucleotide file of {self.name} does not exist")
+                else :
+                    contigs = parse_fasta(nucleotide_file, type = FASTAtypes.CONTIGS, gzipped =  nucleotide_file.endswith(".gz"))
+                    source = nucleotide_file
+
+            if gbk_file :
+                if not os.path.exists(gbk_file):
+                    raise CantGenbankError(f"Genbank file of {self.name} does not exist")
+                else :
+                    contigs, features = parse_genbank(gbk_file, gzipped =  gbk_file.endswith(".gz"))
+                    source = gbk_file
+                    feat_source = gbk_file
+            SeqDb.seq_db.add_genome(self.name, contigs = contigs, source = source, completeness = genome_completeness, redundancy = genome_redundancy, taxonomy = taxonomy)
+
+            if gff_file:
+                if not os.path.exists(gff_file):
+                    raise CantGFFError(f"GFF file of {self.name} does not exist")
+                else :
+                    features = parse_gff(gff_file, gzipped =  gff_file.endswith(".gz"))
+                    feat_source =  gff_file
+
+            if amino_acid_file:
+                if not os.path.exists(amino_acid_file):
+                    raise CantAminoAcidsError(f"Amino-acids file of {self.name} does not exist")
+                else :
+                    features = parse_fasta(amino_acid_file, type = FASTAtypes.FEATURES, gzipped =  amino_acid_file.endswith(".gz"))
+                    feat_source = amino_acid_file
+                    if cds_file :
+                        if not os.path.exists(amino_acid_file):
+                            raise CantCDSError(f"Coding Sequence file (.ffn) of {self.name} does not exist")
+                        cdss = dict(parse_fasta(cds_file, type = FASTAtypes.RAW, gzipped =  cds_file.endswith(".gz")))
+                        annots = {k.split(" # ")[0] : { 'line' : k , 'start' : int(k.split(" # ")[1]), 'end' : int(k.split(" # ")[2]), 'strand' : "+" if k.split(" # ")[3] == "1" else "-" }for k in cdss}
+
+                        for f in features :
+                            f['nucleotides'] = cdss[annots[f['name']]['line']]
+                            f['start'] = annots[f['name']]['start']
+                            f['end'] = annots[f['name']]['end']
+                            f['strand'] = annots[f['name']]['strand']
+                        feat_source = amino_acid_file + ":" + cds_file
+
+            SeqDb.seq_db.add_features(self.name, features =  features, source = feat_source)
+
+        else :
+            if not _quiet_ :
+                print(f"Genome {self.name} loaded from Db")
+
+        self.temp_folder = tempfile.mkdtemp(dir = temp_dir)
+        self.can_haz_gene_clusters = True
         self.gene_clusters = None
-        self._genes = None
-        self.amino_acid_file = amino_acid_file
-        self.amino_acids = None
-        self.nucleotide_file = nucleotide_file
-        self.gbk_file =  gbk_file
-        if self.gbk_file :
-            _ = self.get_nucleotide_file()
-        self._contigs = None
-        self.gff_file = gff_file
-        self.gff = None
-        self._original_complet = genome_completeness
-        self.original_redundancy = genome_redundancy
-        if self._original_complet and self._original_complet > MAX_COMPLETE:
-            self._original_complet =  MAX_COMPLETE
         self.new_completness = None
         self.gene_clusters = None
 
     def __del__(self):
-        if self.gbk_file and self.nucleotide_file:
-            os.remove(self.nucleotide_file)
+        if hasattr(self,"temp_folder"):
+            shutil.rmtree(self.temp_folder)
 
+    @property
+    def completeness(self):
+        if not hasattr(self,"_genome_info"):
+            self._genome_info = self.db.get_genome_info(self.name)
+        return self._genome_info['completeness'] if self._genome_info['completeness'] < MAX_COMPLETE else MAX_COMPLETE
 
-    def set_completeness(self, value):
-        self._original_complet = value if value < MAX_COMPLETE else MAX_COMPLETE
+    @property
+    def taxonomy(self):
+        if not hasattr(self,"_genome_info"):
+            self._genome_info = self.db.get_genome_info(self.name)
+        return json.loads(self._genome_info['taxonomy'])['r207']
 
-    def get_completeness(self):
-        return self._original_complet
+    @completeness.setter
+    def completeness(self, value):
+        self.db.set_value("genomes", self.name, "completeness", value)
+        self._genome_info = self.db.get_genome_info(self.name)
 
-    def get_redundancy(self):
-        return self.original_redundancy
+    @property
+    def redundancy(self):
+        if not hasattr(self,"_genome_info"):
+            self._genome_info = self.db.get_genome_info(self.name)
+        return self._genome_info['redundancy']
+
+    @redundancy.setter
+    def redundancy(self, value):
+        self.db.set_value("genomes", self.name, "redundancy", value)
+        self._genome_info = self.db.get_genome_info(self.name)
 
     def get_clust_set(self):
         return self.gene_clusters.get_clust_set()
@@ -72,23 +140,25 @@ class MetaBin:
             self._genes = { feat.get_id() : feat.get_gene() for feat in self.get_gff() if feat.feature == "CDS"}
         return self._genes
 
-    def get_nucleotide_file(self):
-        if self.nucleotide_file:
-            return nucleotide_file
-        if self.gbk_file :
-            temp_fna = tempfile.NamedTemporaryFile().name
-            if self.gbk_file.endswith(".gz"):
-                handle = gzip.open(self.gbk_file, 'rt', encoding='utf-8')
-            else :
-                handle = open(self.gbk_file, 'r')
-            seqs = SeqIO.parse(handle, "genbank")
-            with open(temp_fna, "w") as handle2:
-                SeqIO.write(seqs,handle2,"fasta")
-            handle.close()
-            self.nucleotide_file = temp_fna
-            return  temp_fna
-        raise CantNucleotideError("You need an nucleotide fasta if you want to use a gff")
+    @property
+    def nucleotide_file(self):
+        if hasattr(self, "_nucleotide_file") and  self._nucleotide_file:
+            return self._nucleotide_file
+        if SeqDb.seq_db.has_genome(self.name):
+            temp_fna = tempfile.NamedTemporaryFile(prefix = "genome_", suffix = ".fna", dir = self.temp_folder, delete = False).name
+            self.export_genome_fasta(temp_fna)
+            self._nucleotide_file = temp_fna
+            return self._nucleotide_file
+        raise CantNucleotideError("You have neither provided a nucleotide containing file, nor the database has nucleotide info available")
 
+    @nucleotide_file.setter
+    def nucleotide_file(self, value):
+        self._nucleotide_file = value
+
+    def export_genome_fasta(self, path : str):
+        if not _quiet_:
+            print(f"Exported genome from MetaBin {self.name} to {path}")
+        SeqDb.seq_db.write_genome_fasta(name = self.name, file = path)
 
     def get_amino_acids(self):
         if not self.amino_acids:

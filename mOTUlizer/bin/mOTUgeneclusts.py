@@ -24,10 +24,10 @@ for g in tqdm(fnas):
 #    _ = test.get_amino_acids()
     genomes.append(test)
 
-#tt = mOTU(name = "pnecs", genomes = genomes, make_gene_clustering = True, thread=20, storage = "/home/moritz/temp/pnecs/motusuite_data/")
+tt = mOTU(name = "pnecs", genomes = genomes, make_gene_clustering = True, thread=20)#, storage = "/home/moritz/temp/pnecs/motusuite_data/")
 #tt.export_gene_clusters(file = "/home/moritz/temp/pnecs/motusuite_data/gene_clusters.json")
-tt = mOTU(name = "test", genomes = genomes, storage = "/home/moritz/temp/test_motusuite/")
-tt.load_gene_clusters("/home/moritz/temp/pnecs/motusuite_data/gene_clusters.json")
+#tt = mOTU(name = "test", genomes = genomes, storage = "/home/moritz/temp/test_motusuite/")
+#tt.load_gene_clusters("/home/moritz/temp/pnecs/motusuite_data/gene_clusters.json")
 
 for t in tqdm(tt.gene_clusters):
     if len(t) > 1:

@@ -1,7 +1,9 @@
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
+from Bio.Seq import Seq
 from mOTUlizer.errors import CantAminoAcidsError
 from math import floor
+from mOTUlizer.db.SeqDb import SeqDb
 
 class GFF():
     def __len__(self):
@@ -18,7 +20,10 @@ class GFF():
     def __iter__(self):
        return GFFIterator(self)
 
-    def __init__(self, genome, gff_file):
+    def __init__(self, genome , gff_file : str = ""):
+        if not SeqDb.seq_db:
+            raise DataBaseNotInitialisedError("The database has not been initialised")
+
         self.entries = []
         self.genome = genome
 
@@ -66,9 +71,9 @@ class GFFentry():
             self.score = None
         self.strand = line[6]
         try :
-            self.score = int(line[7])
+            self.frame = int(line[7])
         except :
-            self.score = None
+            self.frame = None
 
         self.attributes = {l.split('=')[0] : l.split('=')[1]for l in line[8].split(";") if l != ""}
 

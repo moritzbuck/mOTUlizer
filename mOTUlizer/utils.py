@@ -1,6 +1,17 @@
 import random
 import string
 import re
+import gzip
+from enum import Enum, auto
+from Bio.Seq import Seq
+from Bio import SeqIO
+from mOTUlizer.errors import *
+import json
+
+class FASTAtypes(Enum):
+    FEATURES = auto()
+    CONTIGS = auto()
+    RAW = auto()
 
 def random_name(stringLength=8):
     """Generate a random string of fixed length """
@@ -42,3 +53,146 @@ def parse_checkm(file):
 
     lines = [{a : b if a not in ['Completeness', 'Contamination'] else float(b) for a,b in zip(header_line,l) }for l in lines]
     return {l['Bin Id'] : l for l in lines}
+
+def parse_fasta(file, gzipped = False, type = FASTAtypes.RAW):
+    if not isinstance(type, FASTAtypes) or type not in FASTAtypes.__members__.values():
+        raise CantParseError("the type of FASTA file you want to parse isn't known to me")
+    records = []
+    id = None
+    seq = ""
+    if gzipped :
+        handle = gzip.open(file, mode = "rt", encoding = "utf-8")
+    else :
+        handle = open(file)
+    id = handle.readline()[1:-1]
+    for l in handle:
+        if l[0] == ">" :
+            records += [(id, seq)]
+            id = l[1:].rstrip()
+            seq = ""
+        else :
+            seq += l.rstrip()
+    records += [(id, seq)]
+    handle.close()
+
+    if type == FASTAtypes.CONTIGS:
+        return [{ 'contig_name' : r[0].split(" ")[0] , 'sequence' : r[1], 'annotations' : {} if " " not in r[0] else {"fasta_description" : "".join(r[0].split(" ")[1])} } for r in records]
+    elif type == FASTAtypes.FEATURES:
+         return [{'name' : r[0].split(" ")[0], 'amino_acids' : r[1], 'annotations' : {} if " " not in r[0] else {"fasta_descritption" : "".join(r[0].split(" ")[1])} } for r in records]
+    return records
+
+def parse_genbank(file, gzipped = False):
+    if gzipped :
+        handle = gzip.open(file, mode = "rt", encoding = "utf-8")
+    else :
+        handle = open(file)
+
+    records = list(SeqIO.parse(handle, "genbank"))
+    handle.close()
+
+    def clean_record_annotation(annot):
+        if "references" in annot:
+            if len(annot['references']) > 0:
+                annot['references'] = [str(ref) for ref in annot['references']]
+        return annot
+
+    enumerators = dict()
+    def make_uniq_name(contig, ftype):
+        if ftype not in enumerators:
+            enumerators[ftype] = 0
+        enumerators[ftype] += 1
+        return f"{contig}_{ftype}_{enumerators[ftype]}"
+
+    contigs = [{ 'contig_name' : r.id ,
+                 'sequence' : str(r.seq),
+                 'annotations' : json.dumps({"fasta_description" : r.description, "gbk_annotation" : clean_record_annotation(r.annotations)}).replace('"', '""')
+                } for r in records]
+
+    c2seq = {c['contig_name'] : Seq(c['sequence']) for c in contigs}
+
+    feats = []
+    for s in records:
+        for f in s.features:
+            if 'translation' in f.qualifiers:
+                aas = f.qualifiers['translation'][0]
+                del f.qualifiers['translation']
+            else :
+                aas = ""
+
+            if f.type not in {'gene', 'source'}:
+                feat = {
+                "contig_name" : s.id,
+                "source" : f"file={file}",
+                "feature" : f.type,
+                "start" : int(f.location.start),
+                "end" : int(f.location.end),
+                "score" : "",
+                "strand" : "+" if f.location.strand == 1 else "-",
+                "frame" : "",
+                "name" : make_uniq_name(s.id, f.type) if 'locus_tag' not in f.qualifiers else f.qualifiers['locus_tag'][0],
+                "annotations" : json.dumps(f.qualifiers).replace('"', '""')
+                }
+                nucs = c2seq[feat['contig_name']][(feat['start']-1):feat['end']]
+                if feat['strand'] == "-":
+                    nucs = nucs.reverse_complement()
+                feat['nucleotides'] = str(nucs)
+                if  feat['feature'] == "CDS":
+                    if not aas:
+                        aas = nucs.translate()
+                    feat['amino_acids'] = str(aas)
+                else :
+                    feat['amino_acids'] = ""
+                feats += [feat]
+
+    handle.close()
+
+    return (contigs, feats)
+
+
+def parse_gff(file, gzipped = False):
+    if gzipped :
+        handle = gzip.open(file, mode = "rt", encoding = "utf-8")
+    else :
+        handle = open(file)
+
+    feats = []
+    lines = []
+    for l in handle:
+        if l.startswith("##FASTA") or l == "\n":
+            break
+        elif not l.startswith("#"):
+            line = l.strip()
+            line = line.split("\t")
+            attributes = {l.split('=')[0] : l.split('=')[1]for l in line[8].split(";") if l != ""}
+            name = attributes.get("ID", "")
+            if name in attributes:
+                del attributes['name']
+            feat = {
+            "contig_name" : line[0],
+            "source" : f"{line[1]}:file={file}",
+            "feature" : line[2],
+            "start" : int(line[3]),
+            "end" : int(line[4]),
+            "score" : line[5],
+            "strand" : line[6],
+            "frame" : line[7],
+            "name" : name,
+            "annotations" : json.dumps(attributes).replace('"', '""')
+            }
+            feats += [feat]
+    handle.close()
+    contigs = {v['contig_name'] for v in feats}
+    from mOTUlizer.db.SeqDb import SeqDb
+    if SeqDb.seq_db:
+        contigs = {k : Seq(v) for k,v in SeqDb.seq_db.get_contigs(contigs).items()}
+    for feat in feats:
+        nucs = contigs[feat['contig_name']][(feat['start']-1):feat['end']]
+        if feat['strand'] == "-":
+            nucs = nucs.reverse_complement()
+        aas = nucs.translate()
+        feat['nucleotides'] = str(nucs)
+        if  feat['feature'] == "CDS":
+            feat['amino_acids'] = str(aas)
+        else :
+            feat['amino_acids'] = ""
+    return feats

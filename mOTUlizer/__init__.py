@@ -15,3 +15,5 @@ else:
 os.chdir(cwd)
 
 __version__ =  label
+
+_quiet_ = True

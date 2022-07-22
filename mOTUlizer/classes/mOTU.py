@@ -16,6 +16,7 @@ from mOTUlizer.classes.GFF import GFF
 from mOTUlizer.classes.MetaBin import MetaBin
 from mOTUlizer.classes.GeneClusters import *
 from mOTUlizer.config import *
+from mOTUlizer.db.SeqDb import SeqDb
 
 mean = lambda x : "NA"  if "NA" in x else sum(x)/len(x)
 
@@ -27,6 +28,11 @@ class mOTU:
         return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax =  None ) #self.consensus_tax()[0].split(";")[-1])
 
     def __init__(self, genomes, name = "mOTU", gene_clusters = None, make_gene_clustering = False, compute_core = False, quiet = False, storage = None, **kwargs):
+        if not SeqDb.seq_db:
+            raise DataBaseNotInitialisedError("The database has not been initialised")
+
+        self.db = SeqDb.get_global_db()
+
         self.can_haz_gene_clusters = True
         self.quiet = quiet
         if not self.quiet:
@@ -54,7 +60,7 @@ class mOTU:
             threads = kwargs.get('threads', multiprocessing.cpu_count())
             self.gene_clusters = GeneClusters.compute_GeneClusters([self], name = name, precluster = precluster, threads = threads, storage = None if not self.storage else pjoin(self.storage, "gene_clusters"))
 
-        if  1 < sum([g._original_complet is None for g in self]) < len(self)-1 :
+        if  1 < sum([g.completeness is None for g in self]) < len(self)-1 :
             self.merens_trick()
         if self.gene_clusters and any([not g._original_complet for g in self]):
             self.estimate_complete_from_length()
@@ -430,58 +436,72 @@ class mOTU:
 
     def get_anis(self, method = "fastANI", block_size = 500, threads=20):
         if not hasattr(self, 'anis'):
-            if method == "fastANI":
-                if not shutil.which('fastANI'):
-                    print("You need fastANI if you do not provide a file with pairwise similarities, either install it or provide pairwise similarities (see doc...)", file = sys.stderr)
-                    sys.exit(-1)
-                fastani_file = tempfile.NamedTemporaryFile().name
+            anis = self.db.get_anis(self)
+            not_in = { (g1.name, g2.name)  for g1 in self for g2 in self if (g1.name, g2.name) not in anis}
+            to_do = {gg for g in not_in for gg in g}
+            if len(to_do) > 0 :
+                if method == "fastANI":
+                    if not shutil.which('fastANI'):
+                        print("You need fastANI if you do not provide a file with pairwise similarities, either install it or provide pairwise similarities (see doc...)", file = sys.stderr)
+                        sys.exit(-1)
+                    fastani_file = tempfile.NamedTemporaryFile().name
 
-                mags = [b.get_nucleotide_file() for b in self]
-                if any([m is None for m in mags]):
-                    raise CantNucleotideError("All the genomes you want to have ANI for have to have a a nucleotide fasta file")
+                    mags2file = {b : self[b].nucleotide_file for b in to_do}
+                    file2mags = {v.split("/")[-1][:-4] : k for k,v in mags2file.items()}
+                    mags = list(mags2file.values())
 
-                mag_blocks = [mags[i:(i+block_size)] for i in list(range(0,len(mags), block_size))]
+                    if any([m is None for m in mags]):
+                        raise CantNucleotideError("All the genomes you want to have ANI for have to have a a nucleotide fasta file")
 
-                if len(mag_blocks) > 1:
-                    print("You have more then {bsize} bins, so we will run fastANI in blocks, if it crashes due to memory, make smaller blocks".format(bsize = block_size), file=sys.stderr)
+                    mag_blocks = [mags[i:(i+block_size)] for i in list(range(0,len(mags), block_size))]
 
-                with open(fastani_file, "w") as handle:
-                    handle.writelines(["query\tsubject\tani\tsize_q\tsize_s\n"])
+                    if len(mag_blocks) > 1:
+                        print("You have more then {bsize} bins, so we will run fastANI in blocks, if it crashes due to memory, make smaller blocks".format(bsize = block_size), file=sys.stderr)
 
-                for i,bloc1 in enumerate(mag_blocks):
-                    b1_tfile = tempfile.NamedTemporaryFile().name
+                    with open(fastani_file, "w") as handle:
+                        handle.writelines(["query\tsubject\tani\tsize_q\tsize_s\n"])
 
-                    with open(b1_tfile, "w") as handle:
-                        handle.writelines([l +"\n" for l in bloc1])
+                    for i,bloc1 in enumerate(mag_blocks):
+                        b1_tfile = tempfile.NamedTemporaryFile().name
 
-                    for j,bloc2 in enumerate(mag_blocks):
-                            print("doing bloc {i} and {j}".format(i = i, j=j), file = sys.stderr)
-                            b2_tfile = tempfile.NamedTemporaryFile().name
-                            with open(b2_tfile, "w") as handle:
-                                handle.writelines([l  +"\n" for l in bloc2])
+                        with open(b1_tfile, "w") as handle:
+                            handle.writelines([l +"\n" for l in bloc1])
 
-                            out_tfile = tempfile.NamedTemporaryFile().name
-                            call("fastANI --ql {b1} --rl {b2} -o {out} -t {threads} 2> /dev/null".format(b1 = b1_tfile, b2 = b2_tfile, out = out_tfile, threads = threads), shell = True)
-                            with open(out_tfile) as handle:
-                                new_dat = ["\t".join([ll for ll in l.split()]) +"\n" for l in handle.readlines()]
-                            with open(fastani_file, "a") as handle:
-                                handle.writelines(new_dat)
+                        for j,bloc2 in enumerate(mag_blocks):
+                                print("doing bloc {i} and {j}".format(i = i, j=j), file = sys.stderr)
+                                b2_tfile = tempfile.NamedTemporaryFile().name
+                                with open(b2_tfile, "w") as handle:
+                                    handle.writelines([l  +"\n" for l in bloc2])
 
-                            os.remove(out_tfile)
-                            os.remove(b2_tfile)
+                                out_tfile = tempfile.NamedTemporaryFile().name
+                                call("fastANI --ql {b1} --rl {b2} -o {out} -t {threads} 2> /dev/null".format(b1 = b1_tfile, b2 = b2_tfile, out = out_tfile, threads = threads), shell = True)
+                                with open(out_tfile) as handle:
+                                    new_dat = ["\t".join([ll for ll in l.split()]) +"\n" for l in handle.readlines()]
+                                with open(fastani_file, "a") as handle:
+                                    handle.writelines(new_dat)
 
-                os.remove(b1_tfile)
-                with open(fastani_file) as handle:
-                    handle.readline()
-                    out_dists = {(os.path.basename(l.split()[0]), os.path.basename(l.strip().split()[1])) : {'ani' : float(l.split()[2]), 'query_chunks' : float(l.split()[3]), 'reference_chunks' : float(l.split()[4]) } for l in handle}
-                    out_dists = {( ".".join(k[0].split(".")[:-1]) if any([k[0].endswith(ext) for ext in FASTA_EXTS]) else k[0],
-                                   ".".join(k[1].split(".")[:-1]) if any([k[1].endswith(ext) for ext in FASTA_EXTS]) else k[1] ): v
-                                   for k,v in out_dists.items() }
-                os.remove(fastani_file)
-            else :
-                print("No other method for ani computation implemented yet")
-                sys.exit()
-            self.anis = {(self.genome_id2genome[k[0]], self.genome_id2genome[k[1]]) : v for k,v in out_dists.items()}
+                                os.remove(out_tfile)
+                                os.remove(b2_tfile)
+
+                    os.remove(b1_tfile)
+                    with open(fastani_file) as handle:
+                        handle.readline()
+                        out_dists = {(os.path.basename(l.split()[0]), os.path.basename(l.strip().split()[1])) : {'ani' : float(l.split()[2]), 'query_chunks' : float(l.split()[3]), 'reference_chunks' : float(l.split()[4]) } for l in handle}
+                        out_dists = {( ".".join(k[0].split(".")[:-1]) if any([k[0].endswith(ext) for ext in FASTA_EXTS]) else k[0],
+                                       ".".join(k[1].split(".")[:-1]) if any([k[1].endswith(ext) for ext in FASTA_EXTS]) else k[1] ): v
+                                       for k,v in out_dists.items() }
+                    os.remove(fastani_file)
+                else :
+                    print("No other method for ani computation implemented yet")
+                    sys.exit()
+                new_anis = {(file2mags[k[0]], file2mags[k[1]]) : v for k,v in out_dists.items() if (file2mags[k[0]], file2mags[k[1]]) not in anis}
+                for a in to_do:
+                    for b in to_do:
+                        if (a, b) not in new_anis and (a, b) not in anis:
+                            new_anis[(a,b)] = {'ani' : -1, 'query_chunks' : -1, 'reference_chunks' : -1}
+                self.db.add_anis(new_anis)
+                anis.update(new_anis)
+            self.anis = anis
         return self.anis
 
     def cluster_MetaBins(self, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_redundancy = 5, sub_complete = 0, sub_redundancy = 100, threads = 1):
@@ -494,8 +514,8 @@ class mOTU:
 
         all_bins = {a.name : a for a in self}
 
-        good_mag = lambda b : b._original_complet > mag_complete and b.original_redundancy < mag_redundancy
-        decent_sub = lambda b : b._original_complet > sub_complete and b.original_redundancy < sub_redundancy and not good_mag(b)
+        good_mag = lambda b : self[b].completeness > mag_complete and self[b].redundancy < mag_redundancy
+        decent_sub = lambda b : self[b].completeness > sub_complete and self[b].redundancy < sub_redundancy and not good_mag(b)
         good_pairs = [k for k,v  in dist_dict.items() if v['ani'] > ani_cutoff and dist_dict.get((k[1],k[0]), 0)['ani'] > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
         species_graph = igraph.Graph()
         vertexDeict = { v : i for i,v in enumerate(set([x for k in good_pairs for x in k]))}
@@ -546,9 +566,9 @@ class mOTU:
             c1 = genome2clust.get(k[0], "z1")
             c2 = genome2clust.get(k[1], "z2")
             if c1 == c2:
-                dd_dicts[c1][(k[0].name, k[1].name)] = v
+                dd_dicts[c1][(k[0], k[1])] = v
 
-        motus = [ mOTU(genomes = gs, name = prefix + str(i).zfill(zeros), quiet = True) for i, gs in enumerate(genome_clusters)]
+        motus = [ mOTU(genomes = [self[g] for g in gs], name = prefix + str(i).zfill(zeros), quiet = True) for i, gs in enumerate(genome_clusters)]
         for motu, dists in zip(motus, dd_dicts):
             motu.load_anis(dists)
 

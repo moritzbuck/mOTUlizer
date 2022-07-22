@@ -10,6 +10,10 @@ class CantGFFError(FileError):
     """Raised when GFF is missing"""
     pass
 
+class CantCDSError(FileError):
+    """Raised when CDS-fasta is missing"""
+    pass
+
 class CantGeneClusterError(Exception):
     """Raised when something makes creating GeneClusters problematic"""
     pass
@@ -34,6 +38,10 @@ class CantGenesError(FileError):
     """Raised when nucleotide file is missing"""
     pass
 
+class CantParseError(FileError):
+    """Raised when something can't be parsed"""
+    pass
+
 class CantNucleotideError(FileError):
     """Raised when nucleotide file is missing"""
     pass
@@ -52,4 +60,16 @@ class GenomeMismatchError(Exception):
 
 class CoreNotComputedError(Exception):
     """Core hasn't been computed yet error."""
+    pass
+
+class DataBaseError(Exception):
+    """Some Generic DataBaseError."""
+    pass
+
+class DataBaseNotInitialisedError(DataBaseError):
+    """Db not initialised"""
+    pass
+
+class DataBaseBadValuesError(DataBaseError):
+    """Some values passed to the database don't work"""
     pass
