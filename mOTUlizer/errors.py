@@ -73,3 +73,15 @@ class DataBaseNotInitialisedError(DataBaseError):
 class DataBaseBadValuesError(DataBaseError):
     """Some values passed to the database don't work"""
     pass
+
+class FeatureTableError(DataBaseError):
+    """Something wrong in relationship with the feature table of the database"""
+    pass
+
+class WrongSeqTypeError(FeatureTableError):
+    """Probably asked for the wrong type of sequence from the feature table"""
+    pass
+
+class AlreadyAnnotatedError(FeatureTableError):
+    """Your genome is already anotated error"""
+    pass

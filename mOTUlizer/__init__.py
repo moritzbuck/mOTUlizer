@@ -17,3 +17,9 @@ os.chdir(cwd)
 __version__ =  label
 
 _quiet_ = True
+
+def set_quiet(value : bool):
+    _quiet_ = value
+
+def get_quiet() -> bool: 
+    return _quiet_

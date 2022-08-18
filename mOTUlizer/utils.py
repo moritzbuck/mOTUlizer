@@ -7,11 +7,19 @@ from Bio.Seq import Seq
 from Bio import SeqIO
 from mOTUlizer.errors import *
 import json
+import sys
+from mOTUlizer import get_quiet
 
 class FASTAtypes(Enum):
     FEATURES = auto()
     CONTIGS = auto()
     RAW = auto()
+
+
+def message(text, outp = sys.stdout):
+    if get_quiet():
+        print(text, file = outp, flush = True)
+
 
 def random_name(stringLength=8):
     """Generate a random string of fixed length """
