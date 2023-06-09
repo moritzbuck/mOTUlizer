@@ -8,6 +8,7 @@ from Bio.Seq import Seq
 import itertools
 from os.path import join as pjoin
 import shutil
+import mOTUlizer
 from mOTUlizer.errors import *
 from mOTUlizer.utils import random_name, message
 from mOTUlizer.classes.tools.Muscle import Muscle
@@ -16,8 +17,9 @@ from mOTUlizer.db.SeqDb import SeqDb
 import json
 import re
 from tqdm import tqdm
+from mOTUlizer import get_quiet, get_threads
 
-# methods =  ['silixCOGs', 'mmseqsCluster']
+methods =  ['silixCOGs', 'mmseqsCluster', "ppanggolin"]
 # class GeneClusters():
 #     def __repr__(self):
 #         return f"< a GeneClusters-ing of {len(self)} GeneClusters from {len(self.genomes)} genomes>"
@@ -131,19 +133,27 @@ from tqdm import tqdm
 #         clusters = [GeneCluster(name = k, genes2genome = genes2genome[k], representative = representatives[k]) for k in cluster_names]
 #         return GeneClusters([motu], gene_clusters = clusters, storage = storage)
 
-def compute_GeneClusters(motu_or_genome_list, name, precluster = False, threads = 4, method =  "mmseqsCluster", **kwargs):
-    name = name + method + "_"
 
-    temp_folder = tempfile.mkdtemp(prefix = name)
+
+def compute_GeneClusters(motu_or_genome_list, name, precluster = False, method =  "mmseqsCluster", **kwargs):
+    name = name + method + "_"
+    threads = get_threads()
+    temp_folder = tempfile.mkdtemp(dir = mOTUlizer._temp_folder_ , prefix = name.replace(";", "_"))
     all_faas_file = pjoin(temp_folder, "concat.faa")
+
     gene_clusters2rep = None
     prot_ids = set()
     prot2genome ={}
+    ppang_part = {}
     for genome in motu_or_genome_list:
-        for k,seq in genome.amino_acids.items():
-            prot2genome[str(k)] = genome
-        with open(all_faas_file, "a") as handle:
-            handle.writelines([f">{k}\n{seq}\n" for k,seq in genome.amino_acids.items()])
+        if method != "ppanggolin":
+            if not genome.db.has_features(genome.name):
+                raise GenomeNotAnnotated("Your genome has no features, it probably wans't annotated")
+            for k,seq in genome.amino_acids.items():
+                prot2genome[str(k)] = genome
+            with open(all_faas_file, "a") as handle:
+                handle.writelines([f">{k}\n{seq}\n" for k,seq in genome.amino_acids.items()])
+
 
     if precluster:
         cdhit_file = tempfile.NamedTemporaryFile().name
@@ -201,6 +211,31 @@ def compute_GeneClusters(motu_or_genome_list, name, precluster = False, threads 
         for k,v in recs.items():
             for vv in prot2genome[k]:
                 genome2gene_clusters[vv].update([v])
+    elif method == "ppanggolin":
+        from mOTUlizer.classes.tools.Ppanggolin import Ppanggolin
+
+        pang = Ppanggolin(motu_or_genome_list)
+        if not get_quiet():
+            print("Running Ppanggolin  'annotate'")
+        pang.run_command()
+        data = pang.parse_output()
+        clst2gene = data['clst2feature_id']
+        gene_clusters2rep = data['clst2rep']
+        clst2gene = {f"{name}{k}" : v for k,v in clst2gene.items()}
+        gene_clusters2rep = {f"{name}{k}" : v for k,v in gene_clusters2rep.items()}
+        if "get_ppangolin_partition" in kwargs and kwargs['get_ppangolin_partition']:
+            if not get_quiet():
+                print("Remove superpanf from ppangolin object")
+            pang.remove_superpang()
+            if not get_quiet():
+                print("Running ppangolin partitioning")
+            pang.run_just_partitioning()
+            new_out = pang.parse_output()
+            rep2id = { v : k for k,v in gene_clusters2rep.items()}
+            new_id2id = { k : rep2id[v] for k,v in new_out['clst2rep'].items()}
+            ppang_part = { new_id2id[k]  : v  for k,v in new_out['clst2partition'].items()}
+            classes = {'C' : 'cloud', 'P' : 'persistent', 'S' : 'shell' }
+            ppang_part = { k : classes[v] for k,v in ppang_part.items()}
 
     elif method == "mmseqsCluster" :
         covmode = kwargs.get("mmseqsCluster_covmode",0)
@@ -214,7 +249,8 @@ def compute_GeneClusters(motu_or_genome_list, name, precluster = False, threads 
 
         print("running mmseqs easy-cluster with params --min-seq-id {seqid} --cov-mode {covmode} -c {cov} in {}".format(temp_folder, covmode = covmode, cov = cov, seqid=seqid), file = sys.stderr)
         mmseqs_dat = pjoin(temp_folder, "mmseqs_")
-        os.system("mmseqs easy-cluster --threads {threads}  --min-seq-id {seqid} --cov-mode {covmode} -c {cov} {faas} {out} {tmp}  #2> /dev/null > /dev/null".format(covmode = covmode, cov = cov, seqid=seqid, faas = all_faas_file, out = mmseqs_dat, tmp = temp_folder, threads = threads))
+        logs = "2> /dev/null > /dev/null" if mOTUlizer._quiet_ else ""
+        os.system("mmseqs easy-cluster --threads {threads}  --min-seq-id {seqid} --cov-mode {covmode} -c {cov} {faas} {out} {tmp}  {logs}".format(covmode = covmode, cov = cov, seqid=seqid, faas = all_faas_file, out = mmseqs_dat, tmp = temp_folder, threads = threads, logs = logs))
 
         with open(mmseqs_dat + "_cluster.tsv") as handle:
             if precluster:
@@ -227,8 +263,8 @@ def compute_GeneClusters(motu_or_genome_list, name, precluster = False, threads 
 
         rep2clust = {k : name + str(i).zfill(fill) for i,k in enumerate(set(recs.values()))}
         gene_clusters2rep = {v: k for k,v in rep2clust.items()}
-
-        print("For", len(recs), "CDSes we got ", len(gene_clusters2rep), " gene-clusters", file = sys.stderr)
+        if not mOTUlizer._quiet_:
+            print("For", len(recs), "CDSes we got ", len(gene_clusters2rep), " gene-clusters", file = sys.stderr)
 
         recs = {k : rep2clust[v] for k, v in recs.items()}
         clst2gene = { clst : [] for clst in gene_clusters2rep}
@@ -242,8 +278,10 @@ def compute_GeneClusters(motu_or_genome_list, name, precluster = False, threads 
 
     shutil.rmtree(temp_folder)
 
-    clusts = [GeneCluster(features = genes, representative = gene_clusters2rep[clust], name = clust, bunched = True) for clust, genes in clst2gene.items()]
+    clusts = [GeneCluster(features = genes, representative = gene_clusters2rep[clust], annotations = {"ppanggolin_partition" : ppang_part.get(clust, "NA")}, name = clust, bunched = True) for clust, genes in clst2gene.items()]
     SeqDb.get_global_db().commit()
+    if "get_ppangolin_partition" in kwargs and kwargs['get_ppangolin_partition']:
+        clusts = { 'clusts' : clusts, 'ppangolin_partitioning' : ppang_part}
     return clusts
 
 
@@ -257,7 +295,7 @@ class GeneCluster():
     def __repr__(self):
         return f"< a GeneCluster of {len(self.features)} genes from {len(self.genomes)} genomes>"
 
-    def __init__(self, name = None, features = None,  representative = None, bunched = False):
+    def __init__(self, name = None, features = None,  representative = None, annotations = None, bunched = False):
         if not SeqDb.seq_db:
             raise DataBaseNotInitialisedError("The database has not been initialised")
         self.db = SeqDb.get_global_db()
@@ -269,11 +307,15 @@ class GeneCluster():
             self.name = name
 
         if name and self.db.has_gc(name):
-            self.features = self.db.get_features(name)
+            self._data = self.db.get_gc(name)
+            self.features = self._data['features']
+            self.annotations = self._data['annotations']
+            self._representative_id = self._data['representative']
         else :
-            self.db.add_gene_cluster(name, features, representative, bunched = bunched)
+            self.db.add_gene_cluster(name, features, representative, annotations = annotations, bunched = bunched)
             self.features = features
-            self.representative = representative
+            self.annotations = annotations
+            self._representative_id = representative
 
         self._mutation_dict = None
 
@@ -281,10 +323,25 @@ class GeneCluster():
         return len(self.features)
 
     @property
+    def representative(self):
+        if not hasattr(self, "_representative"):
+            dd = self.db.get_features_seq([self._representative_id])
+            self._representative = dd[int(self._representative_id)]
+        return self._representative
+
+    @property
     def feature2genome(self):
         if not hasattr(self, "_feature2genome"):
             self._feature2genome = {f : self.db.get_genomesFromFeat(f) for f in self.features}
         return self._feature2genome
+
+    @property
+    def genome2feature(self):
+        if not hasattr(self, "_genome2feature"):
+            self._genome2feature = {f : [] for f in self.genomes}
+            for k,v in self.feature2genome.items():
+                self._genome2feature[v] += [k]
+        return self._genome2feature
 
     @property
     def genomes(self):

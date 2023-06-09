@@ -17,9 +17,18 @@ os.chdir(cwd)
 __version__ =  label
 
 _quiet_ = True
+_temp_folder_ = "/tmp/"
 
 def set_quiet(value : bool):
     _quiet_ = value
 
-def get_quiet() -> bool: 
+def get_quiet() -> bool:
     return _quiet_
+
+_threads_ = 24
+
+def set_threads(value : int):
+    _threads_ = value
+
+def get_threads() -> int:
+    return _threads_

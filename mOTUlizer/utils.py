@@ -127,24 +127,30 @@ def parse_genbank(file, gzipped = False):
             else :
                 aas = ""
 
+            for k,v in list(f.qualifiers.items()):
+                f.qualifiers[k] = v[0]
+
             if f.type not in {'gene', 'source'}:
                 feat = {
                 "contig_name" : s.id,
                 "source" : f"file={file}",
                 "feature" : f.type,
-                "start" : int(f.location.start),
-                "end" : int(f.location.end),
+                "start" : None if f.location_operator == "join" else int(f.location.start)+1,
+                "end" : None if f.location_operator == "join" else  int(f.location.end),
                 "score" : "",
                 "strand" : "+" if f.location.strand == 1 else "-",
                 "frame" : "",
-                "name" : make_uniq_name(s.id, f.type) if 'locus_tag' not in f.qualifiers else f.qualifiers['locus_tag'][0],
+                "name" : make_uniq_name(s.id, f.type) if 'locus_tag' not in f.qualifiers else f.qualifiers['locus_tag'],
                 "annotations" : json.dumps(f.qualifiers).replace('"', '""')
                 }
-                nucs = c2seq[feat['contig_name']][(feat['start']-1):feat['end']]
-                if feat['strand'] == "-":
-                    nucs = nucs.reverse_complement()
+                if feat['start']:
+                    nucs = c2seq[feat['contig_name']][(feat['start']-1):feat['end']]
+                    if feat['strand'] == "-":
+                        nucs = nucs.reverse_complement()
+                else :
+                    nucs = ""
                 feat['nucleotides'] = str(nucs)
-                if  feat['feature'] == "CDS":
+                if  feat['feature'] == "CDS" and feat['start']:
                     if not aas:
                         aas = nucs.translate()
                     feat['amino_acids'] = str(aas)

@@ -8,11 +8,11 @@ import json
 from mOTUlizer.config import FASTA_EXTS, MAX_COMPLETE
 from mOTUlizer.errors import *
 from Bio import SeqIO
-from mOTUlizer.classes.GFF import GFF
 from mOTUlizer.db.SeqDb import SeqDb
-from mOTUlizer import _quiet_
+import mOTUlizer
 from mOTUlizer.utils import *
 from mOTUlizer.classes.tools.Prokka import Prokka
+from mOTUlizer.classes.GeneClusters import GeneCluster
 import re
 
 
@@ -24,9 +24,9 @@ class MetaBin:
         return hash(self.name)
 
     def __repr__(self) :
-        return "< bin {name} with {n} gene_clusters, and temp_folder {temp} >".format(n = len(self.gene_clusters) if self.gene_clusters else "NA", name = self.name, temp = self.temp_folder)
+        return "< bin {name} with {n} gene_clusters, and temp_folder {temp} >".format(n = len(self.gene_clusters) if hasattr(self, "gene_clusters") else "NA", name = self.name, temp = self.temp_folder)
 
-    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, genome_completeness = None, genome_redundancy = 0, gbk_file = None, cds_file = None, temp_dir = "/tmp/", taxonomy = None, bunched = False):
+    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, genome_completeness = None, genome_redundancy = 0, gbk_file = None, cds_file = None, temp_dir = None, taxonomy = None, bunched = False):
         if not SeqDb.seq_db:
             raise DataBaseNotInitialisedError("The database has not been initialised")
         self.db = SeqDb.get_global_db()
@@ -41,7 +41,7 @@ class MetaBin:
             'scaled' : 1000
         }
         if not self.db.has_genome(self.name):
-            if not _quiet_ :
+            if not mOTUlizer._quiet_ :
                 print(f"Genome {self.name} added to Db")
             if nucleotide_file :
                 if not os.path.exists(nucleotide_file):
@@ -88,10 +88,14 @@ class MetaBin:
             self.db.add_features(self.name, features =  features, source = feat_source, bunched = bunched)
 
         else :
-            if not _quiet_ :
+            if not mOTUlizer._quiet_ :
                 print(f"Genome {self.name} loaded from Db")
 
-        self.temp_folder = tempfile.mkdtemp(dir = temp_dir)
+        if not temp_dir:
+            os.makedirs(mOTUlizer._temp_folder_, exist_ok = True)
+            self.temp_folder = tempfile.mkdtemp(dir = mOTUlizer._temp_folder_ ) 
+        else : 
+            self.temp_folder = tempfile.mkdtemp(dir = temp_dir)
         self.new_completness = None
         self._amino_acids = None
 
@@ -102,16 +106,47 @@ class MetaBin:
     def has_features(self):
         return self.db.has_features(self.name)
 
+
+    @property
+    def taxonomy(self, method = "r207"):
+        if not hasattr(self,"_genome_info"):
+            self._genome_info = self.db.get_genome_info(self.name)
+        if self._genome_info.get('taxonomy'):
+            tax_str = self._genome_info.get('taxonomy')
+            loaded = json.loads(tax_str.replace('""', '"'))
+            return loaded[method].split(";")
+        else :
+            return ""   
+
+
     @property
     def completeness(self):
         if not hasattr(self,"_genome_info"):
             self._genome_info = self.db.get_genome_info(self.name)
-        return self._genome_info['completeness'] if self._genome_info['completeness'] < MAX_COMPLETE else MAX_COMPLETE
-
+        if self._genome_info['completeness']:
+            return self._genome_info['completeness'] if self._genome_info['completeness'] < MAX_COMPLETE else MAX_COMPLETE
+        else :
+            return None
     @completeness.setter
     def completeness(self, value):
         self.db.set_value("genomes", self.name, "completeness", value)
         self._genome_info = self.db.get_genome_info(self.name)
+
+
+    @property
+    def core(self):
+        if not hasattr(self,"_core") or self.core is None:
+            self._core = [GeneCluster(c) for c in self.db.get_core(self.name)]
+        return self._core 
+
+
+    def motupan_completeness(self, ext_core, ext_gcs = None):
+        #use ext_gcs to be faster
+        if ext_gcs:
+            gcs = ext_gcs
+        else :
+            gcs = set(self.gene_clusters)
+        return 100*len(gcs.intersection(ext_core))/len(ext_core) 
 
     @property
     def redundancy(self):
@@ -143,6 +178,14 @@ class MetaBin:
             self.db.add_features(self.name, features = features, source = source)
         else:
             return (source, features)
+
+
+
+    @property
+    def gene_clusters(self):
+        if not hasattr(self, "_gene_clusters"):
+            self._gene_clusters = [GeneCluster(g) for g in self.db.get_genome_GCs(self.name)]
+        return self._gene_clusters
 
     def get_gene(self, id, default = None):
         gene_dict = self.get_genes()
@@ -187,9 +230,22 @@ class MetaBin:
         self._nucleotide_file = value
 
     def export_genome_fasta(self, path : str, type = "nucleotides"):
-        if not _quiet_:
+        if not mOTUlizer._quiet_:
             print(f"Exported genome from MetaBin {self.name} to {path}")
         SeqDb.seq_db.write_genome_fasta(name = self.name, file = path, type = type)
+
+    def export_genome_gff(self, path : str, with_ID_prefix = "", CDS_only = True, ignore_compounded = True):
+        if not mOTUlizer._quiet_:
+            print(f"Exported gff from MetaBin {self.name} to {path}")
+        SeqDb.seq_db.write_genome_gff(name = self.name, file = path, with_ID_prefix = with_ID_prefix, CDS_only = CDS_only, ignore_compounded = ignore_compounded)
+
+    @property
+    def GC_content(self):
+        if not hasattr(self, "_gc"):
+            raw_seq = "".join(self.get_raw_seqs()).upper()
+            self._gc = (raw_seq.count("G")+raw_seq.count("C"))/len(raw_seq)
+        return self._gc
+
 
     @property
     def amino_acids(self):

@@ -22,6 +22,8 @@ class CantLoadGeneClusterError(CantGeneClusterError):
     """Raised when something makes creating GeneClusters problematic"""
     pass
 
+
+
 class CantExeError(Exception):
     """A program is missing"""
     pass
@@ -33,6 +35,11 @@ class CantFindExeError(CantExeError):
 class CantRunError(CantExeError):
     """A program is somehow not working"""
     pass
+
+class CantPangenomeError(Exception):
+    """An issue with pangenome stuff"""
+    pass
+
 
 class CantGenesError(FileError):
     """Raised when nucleotide file is missing"""
@@ -85,3 +92,11 @@ class WrongSeqTypeError(FeatureTableError):
 class AlreadyAnnotatedError(FeatureTableError):
     """Your genome is already anotated error"""
     pass
+
+class ObjectError(Exception):
+    """Some issues with some object"""
+    pass
+
+class GenomeNotAnnotated(ObjectError):
+    """Your genome has no features"""
+    pass 

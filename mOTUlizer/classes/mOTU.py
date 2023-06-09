@@ -10,15 +10,17 @@ import json
 
 from random import shuffle, choice, choices
 from math import log10
+from statistics import mean, median
 
 from mOTUlizer import __version__
-from mOTUlizer.classes.GFF import GFF
+import mOTUlizer
 from mOTUlizer.classes.MetaBin import MetaBin
 from mOTUlizer.classes.GeneClusters import *
 from mOTUlizer.config import *
 from mOTUlizer.db.SeqDb import SeqDb
-from mOTUlizer.utils import get_quiet
-
+from mOTUlizer import get_quiet, get_threads
+from mOTUlizer.classes.tools.SuperPang import SuperPang
+from mOTUlizer.classes.GeneClusters import compute_GeneClusters
 import multiprocessing as mp
 
 mean = lambda x : "NA"  if "NA" in x else sum(x)/len(x)
@@ -37,9 +39,14 @@ class mOTU:
     def __repr__(self):
         return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax =  None ) #self.consensus_tax()[0].split(";")[-1])
 
-    def __init__(self, name, genomes = None, make_gene_clustering = False, compute_core = False, quiet = False, storage = None, **kwargs):
+    def __init__(self, name, genomes = None, make_gene_clustering = False, compute_core = False, quiet = None, storage = None, **kwargs):
         if not SeqDb.seq_db:
             raise DataBaseNotInitialisedError("The database has not been initialised")
+
+        if quiet: 
+            self.quiet = quiet
+        else : 
+            self.quiet = mOTUlizer.get_quiet()
 
         self.db = SeqDb.get_global_db()
         if self.db.has_mOTU(name):
@@ -50,7 +57,7 @@ class mOTU:
 
         self.can_haz_gene_clusters = True
         self.quiet = quiet
-        if not self.quiet:
+        if not mOTUlizer._quiet_:
             print("Initializing mOTU", file = sys.stderr)
         self._genecluster_poolsize = None
         self.name = name
@@ -83,6 +90,43 @@ class mOTU:
             method = kwargs.get('motupan_method', 'motupan_v0_3_2')
             self.compute_core(method, max_it)
 
+    @property
+    def superpang_pangenome(self):
+        if len(self) <2:
+            raise CantPangenome("You need more than one genome to run SuperPang")
+        pange_name = (self.name + "_SuperPang").replace(";","_")
+        if not hasattr(self, "_superpang_pangenome"):
+            if self.db.has_genome(pange_name):
+                self._superpang_pangenome = MetaBin(pange_name)
+            else :
+                sp =  SuperPang(self, quiet = False, threads = get_threads())
+                sp.run_command()
+                seqs = sp.parse_output()
+                seqs = [{'contig_name' : self.name + "_SuperPang_" + s_id.split("_length")[0], 'sequence' : seq, 'annotations' : {'core' : s_id.endswith("_core")}} for s_id, seq in seqs]
+                self._superpang_pangenome = MetaBin(name = pange_name)
+                self.db.add_contigs(pange_name, contigs = seqs)
+                self.db.commit()
+        return self._superpang_pangenome
+
+    def minipipe(self):
+        pange = self.superpang_pangenome
+        if not self.db.has_features(pange.name):
+            print("gene-call SuperPang")
+            pange.annotate(commit = True, tool_args = {'annotate' : False})
+        if not self.core:
+            print("Computing panggolin GCs and partition")
+            ppang_partitions = compute_GeneClusters(self.members + [pange], name = self.name.replace(";","_") + "_w_pange_gcs", method = "ppanggolin", get_ppangolin_partition = True)['ppangolin_partitioning']
+
+            print("Running mOTUpan")
+            self.compute_core()
+
+        print("loading cores")
+        superpang_core = {gc for gc in pange.gene_clusters if any([gc.db.get_features_data(feat)['contig_name'].endswith('-core') for feat in gc.genome2feature[pange.name]])}
+        motupan_core = self.core
+        ppang_core = {k for k in self.gene_clusters if "ppanggolin_partition" in k.annotations and k.annotations['ppanggolin_partition'] == "persistent" }
+        return {'superpang_core' : superpang_core, 'motupan_core' : motupan_core, 'ppang_core': ppang_core}
+
+
     def estimate_complete_from_length(self):
         max_len = max([len(self.genome2gcs[g.name]) for g in self])
         for g in self:
@@ -91,10 +135,11 @@ class mOTU:
     @property
     def genome2gcs(self):
         if not hasattr(self, "_genome2gcs"):
-            print(f"loading genome GCs for {self.name} for the first time")
+            if not mOTUlizer._quiet_:
+                print(f"loading genome GCs for {self.name} for the first time")
             tt = self.db.get_mOTU_GCs(self.name)
             objs = {gg for g in tt.values() for gg in g}
-            objs = {gg : GeneCluster(gg) for gg in objs}
+            objs = {gg : GeneCluster(gg) for gg in tqdm(objs)}
             self._genome2gcs = {k :  {objs[vv] for vv in v} for k,v in tt.items()}
         return self._genome2gcs
 
@@ -113,6 +158,36 @@ class mOTU:
                 self._gene_clusters = None
         return self._gene_clusters
 
+    def stats(self):
+        if not mOTUlizer.get_quiet() :
+            print("Getting pangenome")
+        pangenome = {gc.name for gcs in self.genome2gcs.values() for gc in gcs} 
+        if not mOTUlizer.get_quiet() :
+            print("Getting estimate genome lengths")
+        est_len = [100*len(set(self.genome2gcs[g.name]))/g.completeness for g in self]
+        if not mOTUlizer.get_quiet() :
+            print("Getting completnesses and redundancies")
+        cs = [g.completeness for g in self]
+        rs = [g.redundancy for g in self]
+        new_cs = [-1 if not self.core else g.motupan_completeness(self.core, set(self.genome2gcs[g.name])) for g in self]
+        return { 'mean_completeness' : mean(cs) ,
+                 'median_completeness' : median(cs) , 
+                 'min_completeness'  : min(cs),
+                 'max_completeness'  : max(cs),
+                 'mean_redundancy' : mean(rs) ,
+                 'median_redundancy' : median(rs) , 
+                 'min_redundancy'  : min(rs),
+                 'max_redundancy'  : max(rs),
+                 'mean_new_completeness' : mean(new_cs) ,
+                 'median_new_completeness' : median(new_cs) , 
+                 'min_new_completeness'  : min(new_cs),
+                 'max_new_completeness'  : max(new_cs),
+                 'mean_est_len' : mean(est_len),
+                 'median_est_len' : median(est_len),
+                 'pangenome_len' : len(pangenome),
+                 'core_len' : len(self.core),
+                 'number_ags' : len(self)
+        }
 
     def compute_core(self, method = "motupan_v0_3_2", max_it = 100):
         self.method = method
@@ -148,9 +223,9 @@ class mOTU:
 
             while len(self.mock) < boots:
                 print("Running bootstrap {}/{}".format(len(self.mock)+1, boots), file = sys.stderr)
-                completnesses = {"Genome_{}".format(i) : c.new_completness for i,c in enumerate(self)}
+                completnesses = {"Genome_{}".format(i) : c.motupan_completeness(self.core) for i,c in enumerate(self)}
 
-                accessory = sorted([v for g,v in  self.gene_clusters.get_genecluster_counts().items() if g not in self.core])
+                accessory = sorted([len(gc.genomes) for gc in  self.gene_clusters if gc not in self.core])
                 missing = int(sum(accessory)*(1-mean(list(completnesses.values()))/100))
                 if len(accessory) > 0:
                     addeds = choices(list(range(len(accessory))), weights = accessory, k = missing)
@@ -194,6 +269,7 @@ class mOTU:
             output[0] += ";" + temp[i][0]
             output[1] += [temp[i][1] / len(self)]
         output[0] = output[0][1:]
+        output[1] = ";".join([f"{o:02}" for o in output[1]])
         return tuple(output)
 
     def overlap_matrix(self):
@@ -226,6 +302,9 @@ class mOTU:
                 })
         return out
 
+    def get_gc_proteoms(self):
+        return {gc.name : gc.representative for gc in tqdm(self.gene_clusters)}
+    
     def get_representative(self, method = "complex", max_redund = 5, min_complete = 95):
         if method == "complex":
             tt = [v.get_data() for v in self]
@@ -240,13 +319,14 @@ class mOTU:
             else:
                 return max( [ (k , v['_original_complet']) for k,v in data.items()], key = lambda x: x[1])[0]
         if method == "good_centroid":
-            goods = [g for g in self if g.get_completeness() > min_complete and g.get_redundancy() < max_redund]
-            anis = {g : [] for g in goods}
+            goods = [g for g in self if g.completeness > min_complete and g.redundancy < max_redund]
+            anis = {g.name : [] for g in goods}
+
             for k,v in self.get_anis().items():
                 for gg, nn in [k, tuple(reversed(k))]:
                     if gg in anis:
-                        anis[gg] +=  [v['ani']*nn.get_completeness()/100]
-            return max(anis.items(), key = lambda p: sum(p[1]))[0]
+                        anis[gg] +=  [v['ani']*self[nn].completeness/100]
+            return self[max(anis.items(), key = lambda p: sum(p[1]))[0]]
 
     # def get_representative(tt, max_redund = 5, min_complete = 95):
     #         data = { t['name'] : t for t in tt}
@@ -471,9 +551,13 @@ class mOTU:
         with open(file_path,"w") as handle:
             handle.writelines(["\t".join(head) + "\n"] + [f"{k[0].name}\t{k[1].name}\t{v['ani']}\t{v['query_chunks']}\t{v['reference_chunks']}\n" for k,v in self.get_anis().items() ] )
 
-    def write_checkm_file(self, path):
+    def write_checkm_file(self, path, for_temp_files = False):
         with open(path, "w") as handle:
-            handle.writelines([ "Bin Id\tCompleteness\tContamination\n"] + [f"{t.name}\t{t.completeness}\t{t.redundancy}\n" for t in self])
+            handle.writelines([ "Bin Id\tCompleteness\tContamination\n"])
+            if for_temp_files:
+                handle.writelines([f"{os.path.basename(t.nucleotide_file)[:-4]}\t{t.completeness}\t{t.redundancy}\n" for t in self])
+            else :
+                handle.writelines([f"{t.name}\t{t.completeness}\t{t.redundancy}\n" for t in self])
 
 
     def get_anis(self, method = "fastANI", block_size = 500, threads=20, recompute = False):
@@ -547,10 +631,17 @@ class mOTU:
                 for pair in not_in:
                         if pair not in new_anis:
                             new_anis[(a,b)] = {'ani' : -1, 'query_chunks' : -1, 'reference_chunks' : -1}
+                tt = list(new_anis.items())
                 if recompute:
-                    self.db.update_anis(new_anis)
+                    if not mOTUlizer._quiet_:
+                        print("updating anis")
+                    for i in tqdm(list(range(0, len(tt), 1_000_000))):
+                        self.db.update_anis(dict(tt[i:(i+1_000_000)]))
                 else:
-                    self.db.add_anis(new_anis)
+                    if not mOTUlizer._quiet_:
+                        print("inserting anis")
+                    for i in tqdm(list(range(0, len(tt), 1_000_000))):
+                        self.db.add_anis(dict(tt[i:(i+1_000_000)]))
                 anis.update(new_anis)
             self.anis = anis
         return self.anis
@@ -631,12 +722,12 @@ class mOTU:
     def items(self):
         return mOTUItemIterator(self)
 
-    def parallel_annotate(self, method = "prokka", threads = 24, temp_dir = "/home/moritz/temp/", tool_args = dict()):
+    def parallel_annotate(self, method = "prokka", threads = 24, temp_dir = None, tool_args = dict()):
         to_annots = [(k.name,temp_dir, method, tool_args) for k in self if not k.has_features()]
         print(f"Annotating {len(to_annots)} genomes of {self.name} with {method}")
         pool = mp.Pool(threads)
         to_commit =  pool.starmap_async(_annot_single, to_annots).get()
-        if not get_quiet():
+        if not mOTUlizer._quiet_:
             print("pushing features to db ")
         for name, features, source  in tqdm(to_commit):
             self.db.add_features(name, features = features, source = source)
