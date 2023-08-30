@@ -109,6 +109,7 @@ test_data/*
 
 # local hacks
 scratch/
+temp
 
 #Rseshs
 
@@ -119,3 +120,16 @@ scratch/
 *.JPG
 *.pp3
 *.png
+*~
+
+
+# tex stuff
+
+doc/
+
+*.aux
+*.bbl
+*.idx
+.synctex*
+*.sty
+*.doc

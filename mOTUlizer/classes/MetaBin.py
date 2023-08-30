@@ -26,7 +26,7 @@ class MetaBin:
     def __repr__(self) :
         return "< bin {name} with {n} gene_clusters, and temp_folder {temp} >".format(n = len(self.gene_clusters) if hasattr(self, "gene_clusters") else "NA", name = self.name, temp = self.temp_folder)
 
-    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, genome_completeness = None, genome_redundancy = 0, gbk_file = None, cds_file = None, temp_dir = None, taxonomy = None, bunched = False):
+    def __init__(self, name, nucleotide_file = None, amino_acid_file = None, gff_file = None, gene_clusters = None, genome_completeness = None, genome_redundancy = 0, gbk_file = None, cds_file = None, temp_dir = None, taxonomy = None, bunched = False):
         if not SeqDb.seq_db:
             raise DataBaseNotInitialisedError("The database has not been initialised")
         self.db = SeqDb.get_global_db()
