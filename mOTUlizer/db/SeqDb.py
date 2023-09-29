@@ -110,6 +110,27 @@ class SeqDb:
                     );
                   ''')
 
+
+        cursor.execute('''
+                    CREATE TABLE "genome2gcs"  (
+                        "gc_name"   TEXT,
+                        "genome_name"    TEXT,
+                        FOREIGN KEY("gc_name") REFERENCES gene_clusters("gc_name")
+                        FOREIGN KEY("genome_name") REFERENCES genomes("genome_name")
+                    );
+                  ''')
+
+        cursor.execute('''
+                    CREATE INDEX "gc2genomes"
+                    ON genome2gcs("gc_name");
+                  ''')
+
+        cursor.execute('''
+                    CREATE INDEX "genomes2gcs"
+                    ON genome2gcs("genome_name");
+                  ''')
+
+
         cursor.execute('''
                     CREATE INDEX "gc_name_index"
                     ON gc2feature("gc_name");
@@ -277,7 +298,26 @@ class SeqDb:
 
 
     @bunched_query
-    def add_gene_cluster(self, name :str , features : list, representative : int, annotations = None, bunched = False):
+    def create_gcs(self, gcs : list, bunched = False):
+        """
+        { 
+            'name' : str,
+            'feature' : [ids],
+            'genomes' : [ids],
+            'representative' : id,
+            'annotations' : dict
+        }
+        """
+        data = [ (gc['name'], gc.get('representative'),json.dumps(gc['annotations']).replace('"', '""') if gc.get('annotations') else "{}") for gc in gcs]
+        self.open_cursor.executemany(f"""
+        INSERT INTO gene_clusters (gc_name, representative, annotations)
+        VALUES (?, ?, ?);
+        """, data)
+
+
+
+    @bunched_query
+    def add_gene_cluster(self, name :str , features : list = None , genomes : list = None, representative : int = None, annotations = None, bunched = False):
         if annotations:
             annotations = json.dumps(annotations).replace('"', '""')
         else :
@@ -286,11 +326,27 @@ class SeqDb:
         INSERT INTO gene_clusters (gc_name, representative, annotations)
         VALUES (?, ?, ?);
         """, (name,representative, annotations))
+        
+        if genomes:
+            self.add_genome_tuple2gc(name, [(name, g) for g in genomes], bunched)
+
+        if features:
+            self.add_feature_tuple2gc(name, [(name, f) for f in features], bunched)
+
+
+    @bunched_query
+    def add_feature_tuple2gc(self, gc_feature_tuples : list, bunched = False):
         self.open_cursor.executemany(f"""
         INSERT INTO gc2feature (gc_name, feature_id)
         VALUES (?, ?);
-        """, [(name,f) for f in features])
+        """, [f for f in gc_feature_tuples])
 
+    @bunched_query
+    def add_genome_tuple2gc(self, gc_genome_tuples : list, bunched = False):
+        self.open_cursor.executemany(f"""
+        INSERT INTO genome2gcs (gc_name, genome_name)
+        VALUES (?, ?);
+        """, [f for f in gc_genome_tuples])
 
 
     @bunched_query
@@ -316,12 +372,8 @@ class SeqDb:
             self.set_value("genome", c, "taxonomy", json.dumps(current_tax[c]).replace('"', '""'))
 
     @bunched_query
-    def set_value(self, database, key, column, value):
-        self.open_cursor.execute(f"""
-        UPDATE ?(?)
-        VALUES (?)
-        WHERE key=?;
-        """, (database, column, value, key))
+    def set_value(self, database, key_name, key, column, value):
+        self.open_cursor.execute(f'UPDATE {database} SET {column}={value} WHERE {key_name}="{key}";')
 
 
     def delete_genome(self, genome_name : str):
@@ -486,41 +538,40 @@ class SeqDb:
 
     def get_genome_GCs(self, genome_name):
         self.open_cursor.execute(f"""
-    SELECT gc_name FROM gc2feature WHERE
-    feature_id in (SELECT features.feature_id
-    FROM features
-    	JOIN
-    	 contigs
-    	 ON  contigs.contig_name = features.contig_name
-    WHERE contigs.genome_name = ?);
+    SELECT gc_name FROM genome2gcs
+     WHERE genome2gcs.genome_name = ?;
         """, (genome_name,))
         return [m[0] for m in self.open_cursor.fetchall()]
 
+    def get_genome_from_GC(self, gc_name):
+        self.open_cursor.execute(f"""
+    SELECT genome_name FROM genome2gcs
+     WHERE genome2gcs.gc_name = ?;
+        """, (gc_name,))
+        return [m[0] for m in self.open_cursor.fetchall()]
+
+    def get_genes_from_GC(self, gc_name):
+        self.open_cursor.execute(f"""
+    SELECT feature_id FROM gc2feature
+     WHERE gc2feature.gc_name = ?;
+        """, (gc_name,))
+        return [m[0] for m in self.open_cursor.fetchall()]
+
+
+
     def genome_has_GCs(self, genome_name):
         self.open_cursor.execute(f"""
-    SELECT gc_name FROM gc2feature WHERE
-    feature_id in (SELECT features.feature_id
-    FROM features
-        JOIN
-         contigs
-         ON  contigs.contig_name = features.contig_name
-    WHERE contigs.genome_name = ? LIMIT 1);
+    SELECT gc_name FROM genome2gcs WHERE
+    genome2gcs.genome_name = ? LIMIT 1);
         """, (genome_name,))
         return len(self.open_cursor.fetchall()) > 0
 
 
     def get_mOTU_GCs(self, motu_name):
         self.open_cursor.execute(f"""
-SELECT contigs.genome_name, gc2feature.gc_name FROM gc2feature, features, contigs
-WHERE gc2feature.feature_id = features.feature_id
-AND features.contig_name = contigs.contig_name
-AND gc2feature.feature_id in (SELECT features.feature_id
-					FROM features
-						JOIN
-						 contigs
-						 ON  contigs.contig_name = features.contig_name
-					WHERE contigs.genome_name IN (SELECT genome2motu.genome_name FROM genome2motu WHERE genome2motu.motu_name = ?)
-					);
+    SELECT genome2gcs.genome_name, genome2gcs.gc_name 
+    FROM genome2gcs INNER JOIN genome2motu ON genome2motu.genome_name = genome2gcs.genome_name 
+    WHERE motu_name = ?;
         """, (motu_name,))
         data = self.open_cursor.fetchall()
         odat = {m[0] : [] for m in data}
@@ -658,11 +709,19 @@ AND gc2feature.feature_id in (SELECT features.feature_id
         data = [ gc[0] for gc in self.open_cursor.fetchall()]
         return data if len(data) > 0 else None
 
+    def get_likelies(self, motu_name):
+        self.open_cursor.execute(f"""
+        SELECT gc_name, loglikelihood FROM cores WHERE motu_name = ?;
+        """, (motu_name,))
+        data = {gc[0] : float(gc[1]) for gc in self.open_cursor.fetchall()}
+        return data if len(data) > 0 else None
+
 
     def reset_gcs(self):
         self.open_cursor.execute("DELETE FROM cores;")
         self.open_cursor.execute("DELETE FROM gc2feature;")
         self.open_cursor.execute("DELETE FROM gene_clusters;")
+        self.open_cursor.execute("DELETE FROM genome2gcs;")
         self.commit()
 
     def check_db(self):

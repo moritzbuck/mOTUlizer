@@ -29,6 +29,14 @@ def _annot_single(metabin, temp_dir, method, tool_args):
     source, features = MetaBin(metabin, temp_dir = temp_dir).annotate(method, threads=1, tool_args = tool_args)
     return (metabin, features, source)
 
+def _roc_single(name, len_core, nb_genomes, completnesses, accessory, method):
+    from mOTUlizer.classes.MockData import MockmOTU
+    mock = MockmOTU(name, len_core, nb_genomes, lambda g : completnesses[g], accessory = accessory, method = method)
+    return { 'recall' : mock.recall,
+             'fpr' : mock.recall,
+             'lowest_false' : mock.lowest_false
+             }
+
 class mOTU:
     def __eq__(self, motu):
         return self.name == motu.name
@@ -39,18 +47,22 @@ class mOTU:
     def __repr__(self):
         return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax =  None ) #self.consensus_tax()[0].split(";")[-1])
 
-    def __init__(self, name, genomes = None, make_gene_clustering = False, compute_core = False, quiet = None, storage = None, **kwargs):
-        if not SeqDb.seq_db:
-            raise DataBaseNotInitialisedError("The database has not been initialised")
+    @classmethod
+    def from_datastructure(cls, datastructure):
+        #make gene_clusters:
 
-        if quiet: 
-            self.quiet = quiet
-        else : 
-            self.quiet = mOTUlizer.get_quiet()
+        #make genomes :
+        pass
 
-        self.db = SeqDb.get_global_db()
+    def __init__(self, name, genomes = None, make_gene_clustering = False, compute_core = False, quiet = None, storage = None, db = None, **kwargs):
+        if not db:
+            self.db = SeqDb.get_global_db()
+            if not SeqDb.seq_db:
+                raise DataBaseNotInitialisedError("The database has not been initialised")
+        else:
+            self.db = db
         if self.db.has_mOTU(name):
-            self.members = [MetaBin(g) for g in self.db.get_mOTU(name)]
+            self.members = [MetaBin(g, db = self.db) for g in self.db.get_mOTU(name)]
         else :
             self.members = genomes
             self.db.add_mOTU(name, [g.name for g in genomes])
@@ -65,7 +77,8 @@ class mOTU:
         self.mock = []
         self.core = self.db.get_core(self.name)
         if self.core :
-            self.core = [GeneCluster(c) for c in self.core]
+            self.core = [GeneCluster(c, db = self.db) for c in self.core]
+            self.likelies = self.db.get_likelies(self.name)
 
         self.method = None
 
@@ -78,11 +91,11 @@ class mOTU:
                 raise CantGeneClusterError("You want to recompute the genome clustering but you already have one\n, if you sure you want to, pass 'True' to the mOTU contructor")
             precluster = kwargs.get('precluster', False)
             threads = kwargs.get('threads', multiprocessing.cpu_count())
-            compute_GeneClusters([self], name = name, precluster = precluster, threads = threads)
+            compute_GeneClusters([self], name = name, precluster = precluster, threads = threads, db = self.db)
 
         if  1 < sum([g.completeness is None for g in self]) < len(self)-1 :
             self.merens_trick()
-        if hasattr(self, "_gene_clusters") and any([not g.completeness for g in self]):
+        if self.gene_clusters and any([not g.completeness for g in self]):
             self.estimate_complete_from_length()
 
         if compute_core:
@@ -138,8 +151,10 @@ class mOTU:
             if not mOTUlizer._quiet_:
                 print(f"loading genome GCs for {self.name} for the first time")
             tt = self.db.get_mOTU_GCs(self.name)
+            if len(tt) == 0:
+                return None
             objs = {gg for g in tt.values() for gg in g}
-            objs = {gg : GeneCluster(gg) for gg in tqdm(objs)}
+            objs = {gg : GeneCluster(gg, db = self.db) for gg in tqdm(objs)}
             self._genome2gcs = {k :  {objs[vv] for vv in v} for k,v in tt.items()}
         return self._genome2gcs
 
@@ -153,9 +168,14 @@ class mOTU:
     @property
     def gene_clusters(self):
         if not hasattr(self, "_gene_clusters"):
-            self._gene_clusters = set.union(*list(self.genome2gcs.values()))
-            if len(self._gene_clusters) == 0 :
-                self._gene_clusters = None
+            gcs = self.genome2gcs
+            if gcs is None : 
+                return gcs
+            if len(gcs) > 0 : 
+                gcs = set.union(*list(gcs.values()))
+            if len(gcs) == 0 :
+                return None
+            self._gene_clusters = gcs
         return self._gene_clusters
 
     def stats(self):
@@ -212,35 +232,38 @@ class mOTU:
         else :
             return default
 
-    def roc_values(self, boots):
+    def roc_values(self, boots, threads = 20):
         if not self._core_computed:
             raise CoreNotComputedError("Self explanatory error")
-        if boots > 0 or len(self.mock) >0 :
-            from mOTUlizer.classes.MockData import MockmOTU
+
+        if boots > 0 :
             mean = lambda data: float(sum(data)/len(data)) if 'NA' not in data else "NA"
             variance 	= lambda data, avg: sum([x**2 for x in [i-avg for i in data]])/float(len(data))  if 'NA' not in data else "NA"
             std_dev = lambda data: variance(data, mean(data))**0.5  if 'NA' not in data else "NA"
 
-            while len(self.mock) < boots:
-                print("Running bootstrap {}/{}".format(len(self.mock)+1, boots), file = sys.stderr)
+            to_do = [] 
+            print(f"Running {len(to_do)} bootstrapped FPRs")
+            pool = mp.Pool(threads)
+            for x in range(boots):
                 completnesses = {"Genome_{}".format(i) : c.motupan_completeness(self.core) for i,c in enumerate(self)}
-
                 accessory = sorted([len(gc.genomes) for gc in  self.gene_clusters if gc not in self.core])
                 missing = int(sum(accessory)*(1-mean(list(completnesses.values()))/100))
                 if len(accessory) > 0:
                     addeds = choices(list(range(len(accessory))), weights = accessory, k = missing)
                     for k in addeds :
                         accessory[k] += 1
+                to_do += [ (self.name, len(self.core), len(self), completnesses, accessory, self.method ) ]
 
-                self.mock += [MockmOTU(self.name + "_mock", len(self.core), len(self), lambda g : completnesses[g], accessory = accessory, method = self.method)]
-            return { 'mean_recall' : mean([m.recall for m in self.mock]),
-                     'sd_recall' : std_dev([m.recall for m in self.mock]),
-                     'mean_fpr' : mean([m.fpr for m in self.mock]),
-                     'sd_fpr' : std_dev([m.fpr for m in self.mock]),
-                     'mean_lowest_false' : mean([m.lowest_false for m in self.mock]),
-                     'sd_lowest_false' : std_dev([m.lowest_false for m in self.mock]),
-                     'nb_bootstraps' : len(self.mock)
-                     }
+
+            to_stat =  pool.starmap_async(_roc_single, to_do).get()
+            return { 'mean_recall' : mean([m['recall'] for m in to_stat]),
+             'sd_recall' : std_dev([m['recall'] for m in to_stat]),
+             'mean_fpr' : mean([m['fpr'] for m in to_stat]),
+             'sd_fpr' : std_dev([m['fpr'] for m in to_stat]),
+             'mean_lowest_false' : mean([m['lowest_false'] for m in to_stat]),
+             'sd_lowest_false' : std_dev([m['lowest_false'] for m in to_stat]),
+             'nb_bootstraps' : len(to_stat)
+            }
         else:
             return { 'mean_recall' : "NA",
                      'sd_recall' : "NA",
@@ -343,7 +366,7 @@ class mOTU:
 
     def get_mean_ani(self):
         dist_dict = self.get_anis()
-        dists = [dist_dict.get((a.name,b.name)) for a in self for b in self if a != b ]
+        dists = [dist_dict.get((a.name,b.name))['ani'] for a in self for b in self if a != b ]
         missing_edges = sum([d is None for d in dists])
         found_edges = sum([not d is None for d in dists])
 

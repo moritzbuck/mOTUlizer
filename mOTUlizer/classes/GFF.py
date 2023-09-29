@@ -20,9 +20,13 @@ class GFF():
     def __iter__(self):
        return GFFIterator(self)
 
-    def __init__(self, genome , gff_file : str = ""):
-        if not SeqDb.seq_db:
-            raise DataBaseNotInitialisedError("The database has not been initialised")
+    def __init__(self, genome , gff_file : str = "", db = None):
+        if not db:
+            self.db = SeqDb.get_global_db()
+            if not SeqDb.seq_db:
+                raise DataBaseNotInitialisedError("The database has not been initialised")
+        else : 
+            self.db = db
 
         self.entries = []
         self.genome = genome

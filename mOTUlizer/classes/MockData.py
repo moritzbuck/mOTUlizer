@@ -2,10 +2,12 @@ from random import random, sample, choice
 from mOTUlizer.classes.mOTU import mOTU, mean
 from mOTUlizer.classes.MetaBin import MetaBin
 from mOTUlizer.classes.GeneClusters import *
+from mOTUlizer.db.SeqDb import SeqDb
 
 from collections import defaultdict
 from numpy.random import normal
 from numpy import floor, mean
+import tempfile
 
 genome2guass = {}
 
@@ -13,7 +15,10 @@ class MockmOTU(mOTU):
     def __repr__(self) :
         return "< MockmOTU with {n} genomes, of average {c}% completness>".format(c = 100*self.mean_completeness, n = len(self))
 
-    def __init__(self, name, core_len, nb_genomes, completeness, max_it = 20, accessory = None, method = None):
+    def __init__(self, name, core_len, nb_genomes, completeness, max_it = 20, accessory = None, method = None, tmp_db = None, keep = False):
+
+        if not tmp_db:
+            self.tmp_db = SeqDb(tempfile.NamedTemporaryFile().name)
 
         core = {"CoreTrait_{}".format(i) for i in range(core_len)}
 
@@ -40,7 +45,7 @@ class MockmOTU(mOTU):
         for k, v in self.incompletes.items():
             if len(v) == 0:
                 if len(core) > 0:
-                    self.incompletes[k] = choice(list(core))
+                    self.incompletes[k] = [choice(list(core))]
 
         if core_len == 0:
             self.mean_completeness = "NA"
@@ -52,14 +57,10 @@ class MockmOTU(mOTU):
         self.mean_size = mean([len(m) for m in mock_genomes.values()])
         self.real_core_len = core_len
         zerifneg = lambda g: 0.001 if g < 0 else g
-        self.members = [MetaBin(name = k, genome_completeness = zerifneg(normal(self.completenesses[k], 10))) for k in mock_genomes]
-        super().__init__(genomes = self.members, name = name, quiet=True, compute_core = False)
-        cluster2genome = {clust : [] for set_ in self.incompletes.values() for clust in set_ }
-        for genome, set_ in self.incompletes.items():
-            for clust in set_ :
-                cluster2genome[clust].append(genome)
-        clusters = [GeneCluster(name = clust, genes2genome = { "Imp" + g : [self[g]] for g in genomes}) for clust, genomes in cluster2genome.items()]
-        self.gene_clusters = GeneClusters([self], gene_clusters = clusters)
+
+        self.members = [MetaBin(name = k, genome_completeness = zerifneg(normal(self.completenesses[k], 10)), gene_clusters = [{'name' : gc}  for gc in gcs], db = self.tmp_db) for k, gcs in self.incompletes.items()]
+        super().__init__(genomes = self.members, name = name, quiet=True, compute_core = False, db = self.tmp_db)
+
         self.compute_core()
         if core_len == 0:
             self.recall = "NA"
@@ -71,7 +72,7 @@ class MockmOTU(mOTU):
             else :
                 self.fpr = 1
 
-        self.lowest_false = {k : len(k.get_genomes()) for k in self.gene_clusters if k in self.core and k.name not in core}
+        self.lowest_false = {k : len(k.genomes) for k in self.gene_clusters if k in self.core and k.name not in core}
         self.lowest_false = 1 if(len(self.lowest_false) ==0) else min(self.lowest_false.items(), key = lambda x : x[1])[1]/len(self)
 
 

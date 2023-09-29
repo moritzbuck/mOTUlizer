@@ -135,16 +135,22 @@ methods =  ['silixCOGs', 'mmseqsCluster', "ppanggolin"]
 
 
 
-def compute_GeneClusters(motu_or_genome_list, name, precluster = False, method =  "mmseqsCluster", **kwargs):
+def compute_GeneClusters(motu_or_genome_list, name, precluster = False, method =  "mmseqsCluster", db = None,  **kwargs):
     name = name + method + "_"
     threads = get_threads()
     temp_folder = tempfile.mkdtemp(dir = mOTUlizer._temp_folder_ , prefix = name.replace(";", "_"))
     all_faas_file = pjoin(temp_folder, "concat.faa")
+    if not db:
+        db = SeqDb.get_global_db()
+
+
 
     gene_clusters2rep = None
     prot_ids = set()
     prot2genome ={}
     ppang_part = {}
+    if hasattr(motu_or_genome_list, "_gene_clusters"):
+        delattr(motu_or_genome_list, "_gene_clusters")
     for genome in motu_or_genome_list:
         if method != "ppanggolin":
             if not genome.db.has_features(genome.name):
@@ -278,8 +284,17 @@ def compute_GeneClusters(motu_or_genome_list, name, precluster = False, method =
 
     shutil.rmtree(temp_folder)
 
-    clusts = [GeneCluster(features = genes, representative = gene_clusters2rep[clust], annotations = {"ppanggolin_partition" : ppang_part.get(clust, "NA")}, name = clust, bunched = True) for clust, genes in clst2gene.items()]
-    SeqDb.get_global_db().commit()
+    gc2genome = {clust : {prot2genome[g] for g in genes} for clust, genes in clst2gene.items()}
+
+    clusts = [GeneCluster(representative = gene_clusters2rep[clust], annotations = {"ppanggolin_partition" : ppang_part.get(clust, "NA")}, name = clust, bunched = True, db = db) for clust, genes in clst2gene.items()]
+
+    feat_tuples = [(c.name, gene) for c in clusts for g in clst2gene[c.name]]
+    genome_tuples = [(c.name, g.name) for c in clusts for g in gc2genome[c.name]]
+
+    db.add_feature_tuple2gc(feat_tuples, bunched = True)
+    db.add_genome_tuple2gc(genome_tuples, bunched = True)
+
+    db.commit()
     if "get_ppangolin_partition" in kwargs and kwargs['get_ppangolin_partition']:
         clusts = { 'clusts' : clusts, 'ppangolin_partitioning' : ppang_part}
     return clusts
@@ -293,13 +308,18 @@ class GeneCluster():
         return hash(self.name)
 
     def __repr__(self):
-        return f"< a GeneCluster of {len(self.features)} genes from {len(self.genomes)} genomes>"
+        return f"< GeneCluster '{self.name} 'of {0 if not self.features else len(self.features)} genes from {len(self.genomes)} genomes>"
 
-    def __init__(self, name = None, features = None,  representative = None, annotations = None, bunched = False):
-        if not SeqDb.seq_db:
-            raise DataBaseNotInitialisedError("The database has not been initialised")
-        self.db = SeqDb.get_global_db()
+    def __init__(self, name = None, features = None,  representative = None, annotations = None, genomes = None, bunched = False, db = None):
+
+        if not db:
+            if not SeqDb.seq_db:
+                raise DataBaseNotInitialisedError(f"The database has not been initialised")
+            self.db = SeqDb.get_global_db()
+        else :
+            self.db = db
         """write chekcs here"""
+
 
         if not name:
             self.name = "GeneCluster_" + random_name()
@@ -312,7 +332,7 @@ class GeneCluster():
             self.annotations = self._data['annotations']
             self._representative_id = self._data['representative']
         else :
-            self.db.add_gene_cluster(name, features, representative, annotations = annotations, bunched = bunched)
+            self.db.add_gene_cluster(name = name, features = features, representative = representative, genomes = genomes, annotations = annotations, bunched = bunched)
             self.features = features
             self.annotations = annotations
             self._representative_id = representative
@@ -345,9 +365,12 @@ class GeneCluster():
 
     @property
     def genomes(self):
-        if not hasattr(self, "_genomes"):
-            self._genomes = set(self.feature2genome.values())
-        return self._genomes
+        return self.db.get_genome_from_GC(self.name)
+
+
+    @property
+    def genes(self):
+        return self.db.get_genes_from_GC(self.name)
 
 
     def get_seqs(self):

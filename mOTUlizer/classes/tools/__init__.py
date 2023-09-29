@@ -30,7 +30,7 @@ class Wrapper(ABC):
 
         tests = {exe : shutil.which(exe) for exe in self.__executables__}
         if not all(list(tests.values())):
-            raise CantFindExeError(f"Some of the executables necessary for {type(self)} ain't ere.\nYou are missing {[k for k,v in tests if not v]}")
+            raise CantFindExeError(f"Some of the executables necessary for {type(self)} ain't ere.\nYou are missing {[k for k,v in tests.items() if not v]}")
 
     def get_requs(self):
         return self.__executables__
