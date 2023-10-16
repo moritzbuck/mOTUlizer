@@ -308,9 +308,9 @@ class MetaBin:
         return { 'name' : self.name,
                  'faa-file' : self.amino_acid_file,
                  'fna-file' : self.nucleotide_file,
-                 '_original_complet' : self._original_complet,
-                 'original_redundancy' : self.original_redundancy,
-                 'new_completness' : self.new_completness,
+                 '_original_complet' : self.completeness,
+                 'original_redundancy' : self.redundancy,
+                 'new_completness' : self.motupan_completeness,
         }
     def bin_size(self):
         return sum([len(c) for c in self.get_contigs().values()])
