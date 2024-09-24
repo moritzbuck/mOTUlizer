@@ -8,10 +8,11 @@ import multiprocessing
 import tempfile
 import json
 
-from random import shuffle, choice, choices
+from random import shuffle, choice, choices, sample
 from math import log10
 from statistics import mean, median
-
+from scipy.optimize import curve_fit
+import numpy
 from mOTUlizer import __version__
 import mOTUlizer
 from mOTUlizer.classes.MetaBin import MetaBin
@@ -24,6 +25,7 @@ from mOTUlizer.classes.GeneClusters import compute_GeneClusters
 import multiprocessing as mp
 
 mean = lambda x : "NA"  if "NA" in x else sum(x)/len(x)
+
 def _annot_single(metabin, temp_dir, method, tool_args):
     print(f"Doing {metabin}")
     source, features = MetaBin(metabin, temp_dir = temp_dir).annotate(method, threads=1, tool_args = tool_args)
@@ -46,6 +48,16 @@ class mOTU:
 
     def __repr__(self):
         return "< {tax} mOTU {name}, of {len} members >".format(name = self.name, len = len(self), tax =  None ) #self.consensus_tax()[0].split(";")[-1])
+
+    def __getitem__(self, i):
+        if hasattr(self, "_id2member"):
+            self._id2member = {v.name : v for v in self}
+        if type(i) == int and i < len(self):
+            return self.members[i]
+        elif type(i) == str and i in self._id2member:
+            return self._id2member[i]
+        else:
+            raise KeyError(str(i) + " is not a valid entry for your GeneCluster, try the name of the GC.")
 
     @classmethod
     def from_datastructure(cls, datastructure):
@@ -154,7 +166,7 @@ class mOTU:
             if len(tt) == 0:
                 return None
             objs = {gg for g in tt.values() for gg in g}
-            objs = {gg : GeneCluster(gg, db = self.db) for gg in tqdm(objs)}
+            objs = {gg : GeneCluster(gg, db = self.db) for gg in objs}
             self._genome2gcs = {k :  {objs[vv] for vv in v} for k,v in tt.items()}
         return self._genome2gcs
 
@@ -205,7 +217,7 @@ class mOTU:
                  'mean_est_len' : mean(est_len),
                  'median_est_len' : median(est_len),
                  'pangenome_len' : len(pangenome),
-                 'core_len' : len(self.core),
+                 'core_len' : None if not self.core else len(self.core),
                  'number_ags' : len(self)
         }
 
@@ -466,7 +478,6 @@ class mOTU:
         return len([k for k,v in self.gene_clustersCounts.items() if k not in self.core and v > (0 if singletons else 1)])
 
     def pretty_pan_table(self):
-
         out_dict = {}
         stats = self.get_stats()
         stats = list(stats.values())[0]
@@ -653,13 +664,14 @@ class mOTU:
                     sys.exit()
                 for pair in not_in:
                         if pair not in new_anis:
-                            new_anis[(a,b)] = {'ani' : -1, 'query_chunks' : -1, 'reference_chunks' : -1}
+                            new_anis[pair] = {'ani' : -1, 'query_chunks' : -1, 'reference_chunks' : -1}
                 tt = list(new_anis.items())
                 if recompute:
                     if not mOTUlizer._quiet_:
                         print("updating anis")
                     for i in tqdm(list(range(0, len(tt), 1_000_000))):
                         self.db.update_anis(dict(tt[i:(i+1_000_000)]))
+                    self.db.commit()
                 else:
                     if not mOTUlizer._quiet_:
                         print("inserting anis")
@@ -667,77 +679,47 @@ class mOTU:
                         self.db.add_anis(dict(tt[i:(i+1_000_000)]))
                 anis.update(new_anis)
             self.anis = anis
-        return self.anis
+        return self.anis    
 
-    def cluster_MetaBins(self, ani_cutoff = 95, prefix = "mOTU_", mag_complete = 40, mag_redundancy = 5, sub_complete = 0, sub_redundancy = 100, threads = 1, method = "fastANI"):
-        import igraph
+    def get_openness(self, nb_bootstraps = 100):
+        genome2gc = self.genome2gcs
+        saturation_curves = []
+        def heaps(x, K,alpha):
+            return K*numpy.power(x, alpha)
 
-        dist_dict = self.get_anis(threads = threads, method = method)
+        for i in range(nb_bootstraps):
+            order = sample(genome2gc.keys(), len(genome2gc.keys()))
+            gcs = set()
+            saturation_curve = []
+            for genome in order: 
+                gcs.update(genome2gc[genome])
+                saturation_curve += [len(gcs)]
+            saturation_curves += [saturation_curve]
+        final_curve = [ numpy.mean([s[i]  for s in saturation_curves]) for i in range(len(genome2gc))]
+        result = curve_fit(f = heaps,  xdata = range(1,len(genome2gc)+1), ydata = final_curve)  
+        beta = result[0][1]
+        return beta
 
-        if not self.quiet:
-            print("seeding bin-graph", file = sys.stderr )
+    def genomic_fluidity(self, completeness_thresh = 70, cutoff = 0.9):
+        anis = self.db.get_all_anis()
+        rep = self.get_representative(method = "good_centroid", min_complete = min(70, completeness_thresh))
 
-        all_bins = {a.name : a for a in self}
+        anis = {k : v for k,v in anis.items() if k[0] == rep.name}
 
-        good_mag = lambda b : self[b].completeness > mag_complete and self[b].redundancy < mag_redundancy
-        decent_sub = lambda b : self[b].completeness > sub_complete and self[b].redundancy < sub_redundancy and not good_mag(b)
-        good_pairs = [k for k,v  in dist_dict.items() if v['ani'] > ani_cutoff and dist_dict.get((k[1],k[0]), 0)['ani'] > ani_cutoff and good_mag(k[0]) and good_mag(k[1])]
-        species_graph = igraph.Graph()
-        vertexDeict = { v : i for i,v in enumerate(set([x for k in good_pairs for x in k]))}
-        rev_vertexDeict = { v : i for i,v in vertexDeict.items()}
-        species_graph.add_vertices(len(vertexDeict))
-        species_graph.add_edges([(vertexDeict[k[0]], vertexDeict[k[1]]) for k in good_pairs])
+        genomes = {kk for k in anis.keys() for kk in k}
+        genomes =  { k : MetaBin(k) for k in genomes }
+        genomes =  { k for k,v in genomes.items() if v.completeness > completeness_thresh }
+        seri = sorted([ (v['ani'],k[1]) for k,v in anis.items() if k[1] in genomes], reverse=True)
+        if len([s for s in seri if s[0] > cutoff]) > 0 :
+            anis = [k[0] for k in seri[:-1]]
+            genomes = [k[1] for k in seri[1:]]
+            clas = ["ingroup" if k[1] in self else "outgroup" for k in seri]
+            grc = [(a-b)/100 for a,b in zip(anis[:-1], anis[1:])]
+            
+            return {'fluidity' : max([g for g,a in zip(grc, anis) if a > cutoff and g != a/100]), 'thresh' : anis[grc.index(max([g for g,a in zip(grc, anis) if a > cutoff and g != a/100]))], 'data' : {'anis' : anis, 'genomes' : genomes, 'class' : clas, 'grc' : grc} }
+        else : 
+            return {'fluidity' : None, 'thresh' : None, 'data' : {'anis' : anis, 'genomes' : genomes, 'class' : clas, 'grc' : grc}}
 
-        print("getting clusters", file = sys.stderr)
-
-        genome_clusters = [[rev_vertexDeict[cc] for cc in c ] for c in species_graph.components(mode=igraph.STRONG)]
-
-        mean = lambda l : sum([len(ll) for ll in l])/len(l)
-
-        print("recruiting to graph of the", len(genome_clusters) ," mOTUs of mean length", mean(genome_clusters), file = sys.stderr)
-
-
-        left_pairs = {k : v['ani'] for k, v in dist_dict.items() if v['ani'] > ani_cutoff and k[0] != k[1] and ((decent_sub(k[0]) and good_mag(k[1])) or (decent_sub(k[1]) and good_mag(k[0])))}
-        print("looking for good_left pairs", file = sys.stderr)
-#        print(left_pairs)
-
-        subs = {l : (None,0) for ll in left_pairs.keys() for l in ll if not good_mag(l)}
-#        print(subs)
-        print("looking for best mOTU match", file = sys.stderr)
-        for p,ani in left_pairs.items():
-            if p[0] in subs and subs[p[0]][1] < ani:
-                subs[p[0]] = (p[1], ani)
-            if p[1] in subs and subs[p[1]][1] < ani:
-                subs[p[1]] = (p[0], ani)
-
-        genome_clusters = [set(gg) for gg in genome_clusters]
-
-        print("append to the", len(genome_clusters) ,"mOTUs of mean length", mean(genome_clusters), file = sys.stderr)
-        for k, v in subs.items():
-            for g in genome_clusters:
-                if v[0] in g :
-                    g.add(k)
-
-        genome_clusters = [list(gg) for gg in genome_clusters]
-
-        print("processing the", len(genome_clusters) ,"mOTUs of mean length", mean(genome_clusters), file = sys.stderr)
-        #print(genome_clusters)
-
-        zeros = len(str(len(genome_clusters)))
-
-        genome2clust = {gg : i for i, gs in enumerate(genome_clusters) for gg in gs}
-        dd_dicts = [dict() for i in range(len(genome_clusters))]
-        for k,v in dist_dict.items():
-            c1 = genome2clust.get(k[0], "z1")
-            c2 = genome2clust.get(k[1], "z2")
-            if c1 == c2:
-                dd_dicts[c1][(k[0], k[1])] = v
-
-        motus = [ mOTU(genomes = [self[g] for g in gs], name = prefix + str(i).zfill(zeros), quiet = True) for i, gs in enumerate(genome_clusters)]
-        for motu, dists in zip(motus, dd_dicts):
-            motu.load_anis(dists)
-
-        return motus
 
     def __iter__(self):
        return mOTUIterator(self)

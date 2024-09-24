@@ -18,6 +18,8 @@ import re
 
 class MetaBin:
     def __eq__(self, metabin):
+        if type(metabin) == str:
+            return self.name == metabin
         return self.name == metabin.name
 
     def __hash__(self):

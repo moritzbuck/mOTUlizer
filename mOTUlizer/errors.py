@@ -69,6 +69,15 @@ class CoreNotComputedError(Exception):
     """Core hasn't been computed yet error."""
     pass
 
+class AnisNotComputedError(Exception):
+    """ANIs haven't been computed yet error."""
+    pass
+
+class ClusteringNotComputedError(Exception):
+    """Clustering hasn't been done yet error."""
+    pass
+
+
 class DataBaseError(Exception):
     """Some Generic DataBaseError."""
     pass

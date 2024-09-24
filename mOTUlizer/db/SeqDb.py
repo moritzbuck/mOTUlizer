@@ -424,6 +424,14 @@ class SeqDb:
         anis = self.open_cursor.fetchall()
         return { (v[0],v[1]) : {'ani' : v[2], 'query_chunks' : v[3], 'reference_chunks' : v[4]} for v in anis}
 
+    def get_all_anis(self):
+        self.open_cursor.execute(f"""
+        SELECT query_name, subject_name, ani,query_chunks, reference_chunks  FROM anis;
+        """)
+        anis = self.open_cursor.fetchall()
+        return { (v[0],v[1]) : {'ani' : v[2], 'query_chunks' : v[3], 'reference_chunks' : v[4]} for v in anis}
+
+
     def get_mOTU(self, motu):
         self.open_cursor.execute(f"""
         SELECT genome_name FROM genome2motu
